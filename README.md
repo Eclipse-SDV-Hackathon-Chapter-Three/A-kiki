@@ -21,7 +21,21 @@ We are from South Korea to win this HACKATHON !!!✊✊✊
 ## Core Idea  
 *What is your rough solution idea?*
 
-**A distributed vehicle pursuit system integrating CARLA, ROS2, Zenoh, Kuksa, and Ankaios. Police vehicles use LiDAR-based lock-on to reliably track and encircle criminal vehicles, with zero-copy shared memory ensuring ultra-low latency coordination across the network.**
+<img src = "akiki_system_architecture.png">
+
+A comprehensive system for automated criminal vehicle pursuit and encirclement leveraging CARLA, ROS2, Zenoh, Kuksa, and Ankaios. The system highlights real-time data sharing, cooperative decision-making, and multi-agent autonomy in a dynamic urban environment.
+
+Workflow:
+
+**Lock-On & Pursuit** – Police vehicles detect and lock on to suspect vehicles using LiDAR-based tracking, automatically initiating pursuit maneuvers.
+
+**Real-Time Monitoring** – Live video streams are transmitted via Zenoh → WebSocket, while vehicle telemetry is converted into standardized VSS format by the Kuksa Databroker and delivered to the police station’s web dashboard for monitoring and logging.
+
+**Coordinated Response** – The lock-on signal propagates to nearby patrol units, triggering emergency mode. Each patrol calculates optimal interception routes with A* pathfinding and cooperatively deploys to encircle the suspect vehicle.
+
+**Autonomous Coordination** – Ankaios ensures fleet-level synchronization and resilience, enabling multiple patrol cars to dynamically adapt routes as the suspect changes trajectory.
+
+This architecture demonstrates how standardized vehicle interfaces, ultra-low-latency networking, and intelligent path planning can converge into a scalable, autonomous law-enforcement framework, adaptable from simulation to real-world deployment.
 
 ---
 
