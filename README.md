@@ -21,7 +21,7 @@ We are from South Korea to win this HACKATHON !!!✊✊✊
 ## Core Idea  
 *What is your rough solution idea?*
 
-We are building a system to achieve perfect encirclement of criminal vehicles. Our solution enables multiple police vehicles to cooperatively surround and apprehend target vehicles through coordinated tracking and optimal path planning.
+**A distributed vehicle pursuit system integrating CARLA, ROS2, Zenoh, Kuksa, and Ankaios. Police vehicles use LiDAR-based lock-on to reliably track and encircle criminal vehicles, with zero-copy shared memory ensuring ultra-low latency coordination across the network.**
 
 ---
 
