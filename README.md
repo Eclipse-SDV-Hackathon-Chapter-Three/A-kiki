@@ -46,10 +46,10 @@ This architecture demonstrates how standardized vehicle interfaces, ultra-low-la
 
 Our team is divided into three specialized groups:
 
-**Chase Vehicle Team** - Implementing police vehicles that lock-on to criminal vehicles and pursue them relentlessly until encirclement is achieved
+**Chase Police Team** - Implementing police vehicles that lock-on to criminal vehicles and pursue them relentlessly until encirclement is achieved
 - DongMin Jang, MinHyeok Choi
   
-**Response Vehicle Team** - Implementing police vehicles that receive lock-on signals and dispatch to the criminal vehicle's location via optimal routes
+**Encirclement Police Team** - Implementing police vehicles that receive lock-on signals and dispatch to the criminal vehicle's location via optimal routes
 - JaeHong Lim, JeongMin Jo
   
 **Infrastructure & Integration Team** - Implementing workload orchestration using Ankaios, backbone network configuration, web interface development, and overall coordination
