@@ -201,9 +201,10 @@ class EnhancedPoliceSystemLauncher:
 
         try:
             # Use enhanced spawner if available, otherwise use regular spawner
-            spawner_script = "enhanced_carla_spawner.py"
+            # spawner_script = "enhanced_carla_spawner.py"
             if not Path(spawner_script).exists():
                 spawner_script = "carla_vehicle_spawner.py"
+                print("Enhanced spawner not found, using regular spawner.")
 
             process = subprocess.Popen(
                 ['python3', spawner_script],

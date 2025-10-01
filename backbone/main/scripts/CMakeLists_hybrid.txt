@@ -1,0 +1,36 @@
+cmake_minimum_required(VERSION 3.10)
+project(hybrid_camera_processor CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Find OpenCV
+find_package(OpenCV REQUIRED)
+
+# Find Zenoh C++
+find_package(zenohc REQUIRED)
+
+# Add executable
+add_executable(hybrid_camera_processor hybrid_camera_processor.cpp)
+
+# Link libraries
+target_link_libraries(hybrid_camera_processor
+    PRIVATE
+    ${OpenCV_LIBS}
+    ${zenohc_LIBRARIES}
+)
+
+# Include directories
+target_include_directories(hybrid_camera_processor
+    PRIVATE
+    ${OpenCV_INCLUDE_DIRS}
+    ${zenohc_INCLUDE_DIRS}
+)
+
+# Compiler flags
+target_compile_options(hybrid_camera_processor PRIVATE -Wall -Wextra)
+
+
+
+
+

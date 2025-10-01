@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Camera WebSocket Test</title>
+</head>
+<body>
+    <h1>Camera WebSocket Test</h1>
+    <div id="status">Connecting...</div>
+    <img id="camera" style="max-width: 800px; border: 2px solid black;">
+    <div id="info"></div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:8080');
+        ws.binaryType = 'arraybuffer';
+
+        let frameCount = 0;
+
+        ws.onopen = () => {
+            document.getElementById('status').textContent = '✅ Connected to ws://localhost:8080';
+            console.log('WebSocket connected');
+        };
+
+        ws.onerror = (error) => {
+            document.getElementById('status').textContent = '❌ Connection error';
+            console.error('WebSocket error:', error);
+        };
+
+        ws.onclose = () => {
+            document.getElementById('status').textContent = '❌ Connection closed';
+            console.log('WebSocket closed');
+        };
+
+        ws.onmessage = (event) => {
+            console.log('Received message, type:', typeof event.data, 'size:', event.data.byteLength || event.data.length);
+
+            if (typeof event.data === 'string') {
+                // JSON message
+                console.log('JSON message:', event.data);
+                return;
+            }
+
+            if (event.data instanceof ArrayBuffer) {
+                frameCount++;
+                console.log(`Frame ${frameCount}: ${event.data.byteLength} bytes`);
+
+                try {
+                    // Parse header
+                    const view = new DataView(event.data);
+                    const headerLength = view.getUint32(0, false);
+                    console.log('Header length:', headerLength);
+
+                    // Extract JSON header
+                    const headerBytes = new Uint8Array(event.data, 4, headerLength);
+                    const headerText = new TextDecoder().decode(headerBytes);
+                    const metadata = JSON.parse(headerText);
+                    console.log('Metadata:', metadata);
+
+                    // Extract JPEG
+                    const jpegStart = 4 + headerLength;
+                    const jpegData = event.data.slice(jpegStart);
+                    console.log('JPEG size:', jpegData.byteLength);
+
+                    // Display
+                    const blob = new Blob([jpegData], { type: 'image/jpeg' });
+                    const url = URL.createObjectURL(blob);
+                    const img = document.getElementById('camera');
+                    if (img.src) URL.revokeObjectURL(img.src);
+                    img.src = url;
+
+                    document.getElementById('info').textContent =
+                        `Frame ${frameCount}: ${metadata.camera}, ${(jpegData.byteLength/1024).toFixed(1)} KB`;
+
+                } catch (e) {
+                    console.error('Error processing frame:', e);
+                }
+            }
+        };
+    </script>
+</body>
+</html>

@@ -32,7 +32,8 @@ class PoliceWebSocketBridge:
             'status': None,
             'emergency': None,
             'fleet_status': None,
-            'heartbeat': None
+            'heartbeat': None,
+            'suspect_gps': None  # 범인 GPS 데이터
         }
 
         logging.basicConfig(level=logging.INFO)
@@ -97,6 +98,15 @@ class PoliceWebSocketBridge:
             self.subscribers.append(
                 self.zenoh_session.declare_subscriber(
                     heartbeat_topic, self._on_heartbeat
+                )
+            )
+
+            # Suspect GPS tracking (추격 중인 범인 위치)
+            suspect_gps_topic = f"police/{self.district}/suspect/*/gps"
+            self.logger.info(f"🔍 Subscribing to suspect GPS topic: {suspect_gps_topic}")
+            self.subscribers.append(
+                self.zenoh_session.declare_subscriber(
+                    suspect_gps_topic, self._on_suspect_gps
                 )
             )
 
@@ -192,6 +202,9 @@ class PoliceWebSocketBridge:
         """Handle emergency alerts"""
         try:
             data = self._decode_sample_json(sample)
+            # --- DEBUG LOG ---
+            print(f"[DEBUG] Received emergency alert data: {json.dumps(data, indent=2)}")
+            # --- END DEBUG LOG ---
             unit_id = self._extract_unit_id_from_key(sample.key_expr)
 
             self.logger.warning(f"🚨 Emergency alert for {unit_id}")
@@ -251,6 +264,29 @@ class PoliceWebSocketBridge:
 
         except Exception as e:
             self.logger.error(f"Error processing heartbeat: {e}")
+
+    def _on_suspect_gps(self, sample):
+        """Handle suspect GPS updates (추격 중인 범인 위치)"""
+        try:
+            data = self._decode_sample_json(sample)
+            unit_id = self._extract_unit_id_from_key(sample.key_expr)
+
+            self.logger.info(f"🎯 Received suspect GPS for unit {unit_id}")
+
+            message = {
+                'type': 'suspect_gps',
+                'unit_id': unit_id,
+                'data': data,
+                'timestamp': time.time(),
+                'topic': str(sample.key_expr)
+            }
+
+            self.latest_data['suspect_gps'] = message
+            if self.connected_clients:
+                self._enqueue_message(message)
+
+        except Exception as e:
+            self.logger.error(f"Error processing suspect GPS: {e}")
 
     # WebSocket handling
     async def _broadcast_message(self, message: Dict[str, Any]):

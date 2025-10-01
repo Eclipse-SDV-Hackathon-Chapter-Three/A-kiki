@@ -55,20 +55,15 @@
 
     .main-container {
       display: grid;
-      grid-template-columns: 2fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 1rem;
       padding: 1rem;
-      max-width: 1800px;
+      align-items: start; /* Align items to the top */
+      max-width: 2000px;
       margin: 0 auto;
     }
 
-    .left-panel {
-      display: grid;
-      grid-template-rows: auto 1fr;
-      gap: 1rem;
-    }
-
-    .camera-panel {
+    .camera-panel, .map-panel {
       background: rgba(255,255,255,.1);
       border-radius: 12px;
       padding: 1.5rem;
@@ -77,7 +72,13 @@
       box-shadow: 0 8px 32px rgba(0,0,0,.3);
     }
 
-    .camera-panel h3 {
+    #mapContainer {
+      position: relative;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .camera-panel h3, .map-panel h3 {
       margin-bottom: 1rem;
       color: #64b5f6;
       border-bottom: 2px solid #1976d2;
@@ -118,14 +119,39 @@
       animation: pulse 1s infinite;
     }
 
-    .camera-feed {
-      max-width: 100%;
+    #cameraFeed {
+      width: 100%;
       height: auto;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
       border-radius: 8px;
       border: 2px solid #1976d2;
       box-shadow: 0 4px 16px rgba(0,0,0,.3);
       background: #000;
-      min-height: 300px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    #mapFeed {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1 / 1;
+      border-radius: 8px;
+      background: #000;
+      display: block; /* Prevents extra space under image */
+    }
+
+    .vehicle-marker {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: #f44336;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 0 8px rgba(244, 67, 54, 0.8);
+      transition: all 0.2s linear;
+      transform: translate(-50%, -50%);
+      z-index: 10;
     }
 
     .right-panel {
@@ -401,17 +427,24 @@
   </div>
 
   <div class="main-container">
-    <div class="left-panel">
-      <div class="camera-panel">
-        <h3>
-          Live Camera Feed
-          <div class="unit-selector" id="unitSelector">
-            <!-- Unit selector buttons will be dynamically populated -->
-          </div>
-        </h3>
-        <img id="cameraFeed" class="camera-feed" alt="No camera feed available" />
-        <div class="timestamp" id="cameraTimestamp">Waiting for camera feed...</div>
+    <div class="camera-panel">
+      <h3>
+        Live Camera Feed
+        <div class="unit-selector" id="unitSelector">
+          <!-- Unit selector buttons will be dynamically populated -->
+        </div>
+      </h3>
+      <img id="cameraFeed" class="camera-feed" alt="No camera feed available" />
+      <div class="timestamp" id="cameraTimestamp">Waiting for camera feed...</div>
+    </div>
+
+    <div class="map-panel">
+      <h3>🗺️ Live Map View</h3>
+      <div id="mapContainer" style="position: relative;">
+        <img id="mapFeed" alt="Map feed loading..." />
+        <!-- Vehicle markers will be added here -->
       </div>
+      <div class="timestamp" id="mapTimestamp">Waiting for map feed...</div>
     </div>
 
     <div class="right-panel">
@@ -421,13 +454,13 @@
       </div>
 
       <div class="panel">
-        <h3>👮 Officer Status</h3>
-        <div id="officerStatus" class="no-data">Loading officer data...</div>
+        <h3>🚨 Emergency Alerts</h3>
+        <div id="emergencyAlerts" class="alerts-panel no-data">No active alerts</div>
       </div>
 
       <div class="panel">
-        <h3>🚨 Emergency Alerts</h3>
-        <div id="emergencyAlerts" class="alerts-panel no-data">No active alerts</div>
+        <h3>👮 Officer Status</h3>
+        <div id="officerStatus" class="no-data">Loading officer data...</div>
       </div>
 
       <div class="panel">
@@ -448,6 +481,15 @@
         this.units = new Map();
         this.alerts = [];
         this.maxAlerts = 20;
+        this.vehicleMarkers = new Map();
+        this.suspectMarker = null;  // 범인 마커
+
+        this.mapConfig = {
+            centerX: 0,
+            centerY: 0,
+            worldSize: 400,
+            imageSize: 1080
+        };
 
         this.initializeConnections();
         this.startTimestamp();
@@ -475,7 +517,6 @@
           if (event.data instanceof ArrayBuffer) {
             this.handleCameraFrame(event.data);
           } else if (typeof event.data === 'string') {
-            // Handle JSON messages (welcome, ping/pong, etc.)
             try {
               const msg = JSON.parse(event.data);
               if (msg.type === 'welcome') {
@@ -512,17 +553,11 @@
         };
 
         this.telemetryWs.onmessage = (event) => {
-          console.log('📥 RAW TELEMETRY DATA:', event.data.substring(0, 200) + '...');
           try {
             const data = JSON.parse(event.data);
-            console.log('🔍 PARSED DATA KEYS:', Object.keys(data));
-            console.log('🔍 HAS VEHICLE?', !!data.Vehicle);
-            console.log('🔍 HAS UNIT_ID?', !!data.unit_id);
-            console.log('🔍 HAS ALERT?', !!data.alert);
             this.handleTelemetryData(data);
           } catch (error) {
             console.error('❌ Error parsing telemetry data:', error);
-            console.error('❌ Raw data:', event.data);
           }
         };
 
@@ -530,6 +565,11 @@
           console.log('Telemetry WebSocket disconnected');
           this.telemetryConnected = false;
           this.updateConnectionStatus();
+          if (this.suspectMarker) {
+              this.suspectMarker.remove();
+              this.suspectMarker = null;
+              console.log('Suspect marker cleared due to disconnect.');
+          }
           setTimeout(() => this.connectTelemetry(), 3000);
         };
 
@@ -540,120 +580,253 @@
 
       handleCameraFrame(arrayBuffer) {
         try {
-          // Parse message format: 4 bytes header length + JSON header + JPEG data
           const view = new DataView(arrayBuffer);
-          const headerLength = view.getUint32(0, false); // big endian
-
-          // Extract JSON header
+          const headerLength = view.getUint32(0, false);
           const headerBytes = new Uint8Array(arrayBuffer, 4, headerLength);
           const headerText = new TextDecoder().decode(headerBytes);
           const metadata = JSON.parse(headerText);
 
-          // Extract JPEG data
           const jpegStart = 4 + headerLength;
           const jpegData = arrayBuffer.slice(jpegStart);
-
-          // Display image
           const blob = new Blob([jpegData], { type: 'image/jpeg' });
           const imageUrl = URL.createObjectURL(blob);
-          const img = document.getElementById('cameraFeed');
 
-          if (img.src) {
-            URL.revokeObjectURL(img.src);
+          let imgElement, timestampElement, timestampText;
+
+          switch(metadata.camera) {
+            case 'map':
+              imgElement = document.getElementById('mapFeed');
+              timestampElement = document.getElementById('mapTimestamp');
+              timestampText = `Map updated: ${new Date(metadata.timestamp).toLocaleTimeString()}`;
+              break;
+            case 'front_rgb':
+            default:
+              imgElement = document.getElementById('cameraFeed');
+              timestampElement = document.getElementById('cameraTimestamp');
+              timestampText = `Camera ${metadata.camera} updated: ${new Date(metadata.timestamp).toLocaleTimeString()}`;
+              break;
           }
 
-          img.src = imageUrl;
+          if (imgElement) {
+            if (imgElement.src) {
+              URL.revokeObjectURL(imgElement.src);
+            }
+            imgElement.src = imageUrl;
+          }
+          if (timestampElement) {
+            timestampElement.textContent = timestampText;
+          }
 
-          // Update timestamp with metadata
-          const cameraName = metadata.camera || 'unknown';
-          document.getElementById('cameraTimestamp').textContent =
-            `Camera ${cameraName} updated: ${new Date(metadata.timestamp).toLocaleTimeString()} (${(metadata.size / 1024).toFixed(1)} KB)`;
         } catch (error) {
           console.error('Error processing camera frame:', error);
         }
       }
 
       handleTelemetryData(data) {
-        console.log('🚔 HANDLING TELEMETRY DATA TYPE CHECK...');
-        console.log('🔍 DATA TYPE:', data.type);
-        console.log('🔍 DATA STRUCTURE:', Object.keys(data));
+        if (data.type !== 'vss_data') {
+            console.log('[DEBUG] Important telemetry data received:', JSON.stringify(data, null, 2));
+        }
 
-        // Handle different data types based on wrapper structure
         if (data.type === 'vss_data' && data.data && data.data.Vehicle) {
-          console.log(`✅ VSS DATA DETECTED for unit ${data.unit_id} - Processing...`);
-          this.handleVSSData(data.data); // Pass the inner data object
-        } else if (data.type === 'emergency_alert' && data.data && data.data.alert) {
-          this.handleEmergencyAlert(data.data);
-        } else {
-          console.log('❓ UNKNOWN DATA TYPE - Ignoring...');
-          console.log('❓ Data structure:', data);
+          this.handleVSSData(data.data);
+        } else if (data.type === 'emergency_alert' && data.data) {
+            // The bridge wraps the original message, so we may need to go deeper.
+            const innerData = data.data;
+            if (innerData.type === 'emergency_alert' && innerData.data && innerData.data.alert) {
+                // This handles the double-nested alert from auto_chase_lidar.py
+                this.handleEmergencyAlert(innerData.data);
+            } else if (data.data.alert) {
+                // This handles normally nested alerts from other sources
+                this.handleEmergencyAlert(data.data);
+            }
+        } else if (data.type === 'suspect_gps') {
+          this.handleSuspectGPS(data.data);
+        } else if (data.type === 'clear_suspect') {
+            if (this.suspectMarker) {
+                this.suspectMarker.remove();
+                this.suspectMarker = null;
+                console.log('Suspect marker cleared.');
+            }
         }
       }
 
       handleVSSData(vssData) {
-        console.log('🎯 PROCESSING VSS DATA...');
-        const unitId = vssData.metadata?.unit_id ||
-                       vssData.Vehicle?.VehicleIdentification?.Police?.UnitNumber;
+        const unitId = vssData.metadata?.unit_id;
+        if (!unitId) return;
 
-        console.log('🎯 EXTRACTED UNIT ID:', unitId);
-        console.log('🎯 METADATA:', vssData.metadata);
-        console.log('🎯 VEHICLE ID:', vssData.Vehicle?.VehicleIdentification?.Police);
+        this.units.set(unitId, { ...vssData, lastUpdate: Date.now(), type: 'vss' });
 
-        if (!unitId) {
-          console.log('❌ NO UNIT ID FOUND - Aborting VSS processing');
-          return;
-        }
-
-        // Update unit data
-        this.units.set(unitId, {
-          ...vssData,
-          lastUpdate: Date.now(),
-          type: 'vss'
-        });
-
-        console.log('✅ UNIT DATA UPDATED FOR:', unitId);
-        console.log('✅ TOTAL UNITS NOW:', this.units.size);
-
-        // Check for emergency conditions
         this.checkEmergencyConditions(unitId, vssData);
 
-        // Update displays
-        console.log('🖥️ UPDATING DISPLAYS...');
         this.updateActiveUnits();
         this.updateOfficerStatus();
         this.updateVehicleDiagnostics();
+
+        const simPos = vssData.Vehicle.CurrentLocation?.SimulationPosition;
+        if (simPos) {
+            this.updateVehicleMarker(unitId, simPos);
+        }
+      }
+
+      updateVehicleMarker(unitId, simPos) {
+        const mapContainer = document.getElementById('mapContainer');
+        if (!mapContainer) return;
+
+        const { centerX, centerY, worldSize } = this.mapConfig;
+        const relX = simPos.x - centerX;
+        const relY = simPos.y - centerY;
+
+        console.log(`🚔 Police CARLA coords: x=${simPos.x.toFixed(2)}, y=${simPos.y.toFixed(2)}`);
+        console.log(`📏 Police Relative: relX=${relX.toFixed(2)}, relY=${relY.toFixed(2)}`);
+
+        let normX = (relY + worldSize / 2) / worldSize;
+        let normY = (-relX + worldSize / 2) / worldSize;
+
+        console.log(`🔢 Police Normalized: normX=${normX.toFixed(3)}, normY=${normY.toFixed(3)}`);
+
+        normX = Math.max(0, Math.min(1, normX));
+        normY = Math.max(0, Math.min(1, normY));
+
+        const pixelX = (normX * mapContainer.offsetWidth) - 45;
+        const pixelY = (normY * mapContainer.offsetHeight) + 2;
+
+        console.log(`📌 Police Pixel position: pixelX=${pixelX.toFixed(2)}, pixelY=${pixelY.toFixed(2)}`);
+
+        let marker = this.vehicleMarkers.get(unitId);
+        if (!marker) {
+            marker = document.createElement('div');
+            marker.className = 'vehicle-marker';
+            marker.textContent = unitId.replace('UNIT-','');
+            marker.style.fontSize = '10px';
+            marker.style.textAlign = 'center';
+            marker.style.lineHeight = '20px';
+            marker.style.color = 'white';
+            mapContainer.appendChild(marker);
+            this.vehicleMarkers.set(unitId, marker);
+        }
+
+        marker.style.left = `${pixelX.toFixed(2)}px`;
+        marker.style.top = `${pixelY.toFixed(2)}px`;
+
+        if (unitId === this.selectedUnit) {
+            marker.style.background = '#1976d2';
+            marker.style.zIndex = '20';
+        } else {
+            marker.style.background = '#f44336';
+            marker.style.zIndex = '10';
+        }
+      }
+
+      handleSuspectGPS(suspectData) {
+        console.log('🎯 Suspect GPS data received:', suspectData);
+
+        if (!suspectData || !suspectData.location) {
+          console.warn('Invalid suspect GPS data');
+          return;
+        }
+
+        const mapContainer = document.getElementById('mapContainer');
+        if (!mapContainer) return;
+
+        // CARLA world 좌표를 맵 픽셀 좌표로 변환
+        const { centerX, centerY, worldSize } = this.mapConfig;
+        const relX = suspectData.location.x - centerX;
+        const relY = suspectData.location.y - centerY;
+
+        console.log(`📍 Suspect CARLA coords: x=${suspectData.location.x.toFixed(2)}, y=${suspectData.location.y.toFixed(2)}`);
+        console.log(`📏 Relative: relX=${relX.toFixed(2)}, relY=${relY.toFixed(2)}`);
+
+        let normX = (relY + worldSize / 2) / worldSize;
+        let normY = (-relX + worldSize / 2) / worldSize;
+
+        console.log(`🔢 Normalized: normX=${normX.toFixed(3)}, normY=${normY.toFixed(3)}`);
+
+        normX = Math.max(0, Math.min(1, normX));
+        normY = Math.max(0, Math.min(1, normY));
+
+        const pixelX = (normX * mapContainer.offsetWidth) - 45;
+        const pixelY = (normY * mapContainer.offsetHeight) + 2;
+
+        console.log(`📌 Pixel position: pixelX=${pixelX.toFixed(2)}, pixelY=${pixelY.toFixed(2)}`);
+
+        // Suspect 마커 생성 또는 업데이트
+        if (!this.suspectMarker) {
+          this.suspectMarker = document.createElement('div');
+          this.suspectMarker.className = 'vehicle-marker';
+          this.suspectMarker.style.background = '#ff0000';  // 빨간색
+          this.suspectMarker.style.borderColor = '#ffff00';  // 노란색 테두리
+          this.suspectMarker.style.borderWidth = '3px';
+          this.suspectMarker.style.width = '24px';
+          this.suspectMarker.style.height = '24px';
+          this.suspectMarker.textContent = '🚗';  // 범인 차량 아이콘
+          this.suspectMarker.style.fontSize = '14px';
+          this.suspectMarker.style.textAlign = 'center';
+          this.suspectMarker.style.lineHeight = '24px';
+          this.suspectMarker.style.zIndex = '15';  // 경찰차 위에 표시
+          this.suspectMarker.title = 'Suspect Vehicle';
+          mapContainer.appendChild(this.suspectMarker);
+        }
+
+        // 마커 위치 업데이트
+        this.suspectMarker.style.left = `${pixelX.toFixed(2)}px`;
+        this.suspectMarker.style.top = `${pixelY.toFixed(2)}px`;
+
+        console.log(`🎯 Suspect marker updated at (${pixelX.toFixed(2)}, ${pixelY.toFixed(2)})`);
       }
 
       handleEmergencyAlert(alertData) {
-        const alert = {
+        const unitId = alertData.unit_id;
+        const alert = alertData.alert || {};
+
+        if (unitId) {
+            if (!this.units.has(unitId)) {
+                this.units.set(unitId, {}); // Ensure unit exists
+            }
+            const unit = this.units.get(unitId);
+
+            // Ensure nested structure exists
+            if (!unit.Vehicle) unit.Vehicle = {};
+            if (!unit.Vehicle.Police) unit.Vehicle.Police = {};
+            if (!unit.Vehicle.Police.Emergency) unit.Vehicle.Police.Emergency = {};
+            if (!unit.Vehicle.Police.Status) unit.Vehicle.Police.Status = {};
+            if (!unit.Vehicle.Police.Emergency.Lightbar) unit.Vehicle.Police.Emergency.Lightbar = {};
+
+            if (alert.type === 'chase_started') {
+                unit.Vehicle.Police.Emergency.Lightbar.IsActive = true;
+                unit.Vehicle.Police.Status.Availability = 'EMERGENCY';
+            } else if (alert.type === 'chase_ended') {
+                unit.Vehicle.Police.Emergency.Lightbar.IsActive = false;
+                unit.Vehicle.Police.Status.Availability = 'AVAILABLE';
+            }
+            this.units.set(unitId, unit);
+        }
+
+        const fullAlert = {
           id: Date.now(),
           timestamp: new Date(),
-          unit: alertData.unit_id,
-          type: alertData.alert?.type || 'UNKNOWN',
-          priority: alertData.alert?.priority || 'MEDIUM',
-          message: alertData.alert?.message || 'Emergency alert',
-          details: alertData.alert,
+          unit: unitId,
+          type: alert.type || 'UNKNOWN',
+          priority: alert.priority || 'MEDIUM',
+          message: alert.message || 'Emergency alert',
+          details: alert,
           ...alertData
         };
 
-        this.alerts.unshift(alert);
+        this.alerts.unshift(fullAlert);
         if (this.alerts.length > this.maxAlerts) {
           this.alerts = this.alerts.slice(0, this.maxAlerts);
         }
 
-        // Show critical alerts in top bar
-        if (alert.priority === 'CRITICAL') {
-          this.showCriticalAlert(alert);
+        if (fullAlert.priority === 'CRITICAL') {
+          this.showCriticalAlert(fullAlert);
         }
 
         this.updateEmergencyAlerts();
+        this.updateActiveUnits();
       }
 
       checkEmergencyConditions(unitId, vssData) {
         const emergency = vssData.Vehicle?.Police?.Emergency || {};
-        const status = vssData.Vehicle?.Police?.Status || {};
-
-        // Check for panic button
         if (emergency.PanicButton?.IsPressed) {
           this.handleEmergencyAlert({
             unit_id: unitId,
@@ -664,20 +837,6 @@
             }
           });
         }
-
-        // Check for emergency equipment activation
-        if (emergency.Lightbar?.IsActive || emergency.Siren?.IsActive) {
-          if (status.Availability === 'EMERGENCY') {
-            this.handleEmergencyAlert({
-              unit_id: unitId,
-              alert: {
-                type: 'EMERGENCY_RESPONSE',
-                priority: 'HIGH',
-                message: `🚨 Emergency response active - ${unitId}`,
-              }
-            });
-          }
-        }
       }
 
       showCriticalAlert(alert) {
@@ -685,7 +844,6 @@
         alertsBar.textContent = `🚨 ${alert.message} 🚨`;
         alertsBar.classList.add('visible');
 
-        // Auto-hide after 30 seconds
         setTimeout(() => {
           alertsBar.classList.remove('visible');
         }, 30000);
@@ -717,7 +875,6 @@
           return;
         }
 
-        // Sort units by emergency status and unit ID
         const sortedUnits = Array.from(this.units.entries()).sort((a, b) => {
           const aEmergency = this.isUnitInEmergency(a[1]);
           const bEmergency = this.isUnitInEmergency(b[1]);
@@ -725,7 +882,6 @@
           return a[0].localeCompare(b[0]);
         });
 
-        // Update unit selector
         let selectorHTML = '';
         let unitsHTML = '';
 
@@ -739,11 +895,9 @@
           const isEmergency = this.isUnitInEmergency(unitData);
           const availability = status.Availability || 'UNKNOWN';
 
-          // Unit selector button
           const buttonClass = `unit-button ${this.selectedUnit === unitId ? 'active' : ''} ${isEmergency ? 'emergency' : ''}`;
           selectorHTML += `<button class="${buttonClass}" onclick="dashboard.selectUnit('${unitId}')">${unitId}</button>`;
 
-          // Unit status display
           const statusClass = `unit-status ${isEmergency ? 'emergency' : availability.toLowerCase()}`;
           const badgeClass = `status-badge status-${availability.toLowerCase().replace('_', '-')}`;
 
@@ -755,8 +909,8 @@
                   ${location.Latitude ? `📍 ${location.Latitude.toFixed(4)}, ${location.Longitude.toFixed(4)}` : 'Location unknown'}
                 </div>
                 <div class="unit-details">
-                  🚗 Speed: <span style="color: #64b5f6; font-weight: bold;">${Math.round(unitData.Vehicle.Speed || 0)} km/h</span> |
-                  ⚡ Throttle: <span style="color: ${(unitData.Vehicle.Chassis?.Accelerator?.PedalPosition || 0) > 50 ? '#ff9800' : '#4caf50'}; font-weight: bold;">${Math.round(unitData.Vehicle.Chassis?.Accelerator?.PedalPosition || 0)}%</span> |
+                  🚗 Speed: <span style="color: #64b5f6; font-weight: bold;">${Math.round(unitData.Vehicle.Speed || 0)} km/h</span> | 
+                  ⚡ Throttle: <span style="color: ${(unitData.Vehicle.Chassis?.Accelerator?.PedalPosition || 0) > 50 ? '#ff9800' : '#4caf50'}; font-weight: bold;">${Math.round(unitData.Vehicle.Chassis?.Accelerator?.PedalPosition || 0)}%</span> | 
                   🛑 Brake: <span style="color: ${(unitData.Vehicle.Chassis?.Brake?.PedalPosition || 0) > 20 ? '#f44336' : '#757575'}; font-weight: bold;">${Math.round(unitData.Vehicle.Chassis?.Brake?.PedalPosition || 0)}%</span><br>
                   👮 Officers: ${police.Officer?.Primary?.Name || 'Unknown'} ${police.Officer?.Secondary?.Name ? ' + 1' : ''}
                 </div>
@@ -786,7 +940,6 @@
         container.innerHTML = unitsHTML;
         unitSelector.innerHTML = selectorHTML;
 
-        // Auto-select first unit if none selected
         if (!this.selectedUnit && sortedUnits.length > 0) {
           this.selectUnit(sortedUnits[0][0]);
         }
@@ -807,14 +960,13 @@
 
         let html = '';
 
-        // Primary Officer
         if (officers.Primary) {
           const officer = officers.Primary;
           html += `
             <div class="officer-info">
               <div class="officer-name">👮 ${officer.Name || 'Unknown'}</div>
               <div class="officer-details">
-                Badge: ${officer.BadgeNumber || 'N/A'} |
+                Badge: ${officer.BadgeNumber || 'N/A'} | 
                 Status: ${officer.Status || 'UNKNOWN'}<br>
                 Shift Start: ${officer.ShiftStart ? new Date(officer.ShiftStart).toLocaleTimeString() : 'N/A'}<br>
                 Body Camera: ${equipment.BodyCamera?.Officer1?.IsActive ?
@@ -825,14 +977,13 @@
           `;
         }
 
-        // Secondary Officer
         if (officers.Secondary && officers.Secondary.Name) {
           const officer = officers.Secondary;
           html += `
             <div class="officer-info">
               <div class="officer-name">👮 ${officer.Name}</div>
               <div class="officer-details">
-                Badge: ${officer.BadgeNumber || 'N/A'} |
+                Badge: ${officer.BadgeNumber || 'N/A'} | 
                 Status: ${officer.Status || 'UNKNOWN'}<br>
                 Body Camera: ${equipment.BodyCamera?.Officer2?.IsActive ?
                   `🟢 Active (${equipment.BodyCamera.Officer2.BatteryLevel || 0}%)` :
@@ -842,7 +993,6 @@
           `;
         }
 
-        // Active Call Information
         if (activeCall) {
           const callClass = activeCall.Priority === 'CRITICAL' ? 'call-info critical' : 'call-info';
           html += `
@@ -875,7 +1025,7 @@
 
         const diagnostics = [
           {
-            label: 'Speed', // Use vssData.Vehicle.Speed for consistency
+            label: 'Speed',
             value: `${Math.round(unitData.Vehicle.Speed || 0)} km/h`,
             className: (unitData.Vehicle.Speed || 0) > 100 ? 'diagnostic-warning' : ''
           },
@@ -974,6 +1124,12 @@
         this.updateActiveUnits();
         this.updateOfficerStatus();
         this.updateVehicleDiagnostics();
+        this.units.forEach((unitData, id) => {
+            const simPos = unitData.Vehicle.CurrentLocation?.SimulationPosition;
+            if (simPos) {
+                this.updateVehicleMarker(id, simPos);
+            }
+        });
       }
 
       isUnitInEmergency(unitData) {
@@ -988,8 +1144,7 @@
 
       startTimestamp() {
         const updateTimestamp = () => {
-          document.getElementById('timestamp').textContent =
-            new Date().toLocaleString();
+          document.getElementById('timestamp').textContent = new Date().toLocaleString();
         };
 
         updateTimestamp();
@@ -997,7 +1152,6 @@
       }
     }
 
-    // Initialize dashboard
     let dashboard;
     document.addEventListener('DOMContentLoaded', () => {
       dashboard = new PoliceCommandCenter();

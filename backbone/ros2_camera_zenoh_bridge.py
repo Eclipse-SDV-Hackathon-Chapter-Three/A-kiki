@@ -37,9 +37,31 @@ class ROS2CameraZenohBridge(Node):
             10
         )
 
+        # Subscribe to CARLA map camera topic
+        self.map_subscriber = self.create_subscription(
+            CompressedImage,
+            '/carla/map_camera/image/compressed',
+            self.map_camera_callback,
+            10
+        )
+
         self.get_logger().info('Subscribed to /carla/hero/camera/image/compressed')
-        self.get_logger().info('Publishing to zenoh: camera/front_rgb/compressed')
+        self.get_logger().info('Subscribed to /carla/map_camera/image/compressed')
+        self.get_logger().info('Publishing to zenoh: camera/front_rgb/compressed and camera/map/compressed')
         self.get_logger().info('ROS2 Camera Zenoh Bridge started')
+
+    def map_camera_callback(self, msg):
+        """Forward compressed map image to zenoh"""
+        try:
+            # Get compressed JPEG data directly
+            jpeg_data = bytes(msg.data)
+
+            # Publish to zenoh
+            zenoh_key = "camera/map/compressed"
+            self.zenoh_session.put(zenoh_key, jpeg_data)
+
+        except Exception as e:
+            self.get_logger().error(f'Error processing map camera frame: {e}')
 
     def camera_callback(self, msg):
         """Forward compressed image to zenoh"""

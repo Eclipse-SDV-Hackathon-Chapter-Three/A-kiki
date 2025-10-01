@@ -1,0 +1,34 @@
+🚗 Starting Manual Vehicle Control...
+./run_manual_vehicle.sh: line 12: cd: /home/dongmin/SEA-ME/Eclipse/carla/CARLA_0.9.15/PythonAPI/new_examples /police/main/scripts: No such file or directory
+pygame 2.6.1 (SDL 2.28.4, Python 3.10.12)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+🚗 Manual Vehicle Control initialized
+🚗 Starting Manual Vehicle Control...
+✅ Connected to CARLA server at localhost:2000
+Attempting to spawn vehicle at: Location(x=-104.150002, y=44.150002, z=1.000000)
+Vehicle rotation (yaw): 270.0 degrees
+First vehicle spawn attempt failed, trying alternative locations...
+Trying spawn point 1: Location(x=-64.644844, y=24.471010, z=0.600000)
+Trying spawn point 2: Location(x=-67.254570, y=27.963758, z=0.600000)
+Vehicle successfully spawned at alternative location: Location(x=-67.254570, y=27.963758, z=0.600000)
+Vehicle spawned successfully at: Location(x=-67.254570, y=27.963757, z=0.596125)
+🚗 Vehicle physics simulation ENABLED
+🚗 Vehicle spawned at Location(x=-104.150002, y=46.150002, z=1.000000)
+📷 Camera View initialized for Manual Vehicle Control
+🎯 Bounding boxes: Disabled
+🌐 Zenoh: Disabled
+📷 Camera attached to vehicle
+📷 Camera attached to manual vehicle
+✅ Manual vehicle control ready!
+🎮 Use WASD keys to control the vehicle
+📷 Camera view will be displayed
+🛑 Press ESC to exit
+
+🛑 Received signal 2, cleaning up...
+🧹 Cleaning up OpenCV windows...
+✅ OpenCV windows cleaned up
+🧹 Cleaning up resources...
+📷 Camera view cleaned up
+✅ Cleanup completed
+🧹 Cleaning up OpenCV windows...
+✅ OpenCV windows cleaned up

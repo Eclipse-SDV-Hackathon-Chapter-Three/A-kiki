@@ -1,0 +1,4 @@
+🚗 Starting Manual Vehicle Control...
+./run_manual_vehicle.sh: line 12: cd: /home/dongmin/SEA-ME/Eclipse/carla/CARLA_0.9.15/PythonAPI/new_examples /police/main/scripts: No such file or directory
+./run_manual_vehicle.sh: line 15: 38583 Segmentation fault      (core dumped) python3 manual_vehicle_control.py
+✅ Manual Vehicle Control finished
