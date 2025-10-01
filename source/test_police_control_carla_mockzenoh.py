@@ -294,29 +294,7 @@ def spawn_police_vehicle(world, spawn_point):
     vehicle = world.spawn_actor(police_bp, spawn_point)
     return vehicle
 
-def spawn_truck(world, spawn_point):
-    """트럭을 스폰하고 autopilot 모드로 설정"""
-    blueprint_library = world.get_blueprint_library()
-    truck_candidates = [
-        "vehicle.carlamotors.carlacola",
-        "vehicle.tesla.cybertruck",
-        "vehicle.carlamotors.firetruck"
-    ]
-    truck_bp = None
-    for cand in truck_candidates:
-        bps = blueprint_library.filter(cand)
-        if bps:
-            truck_bp = bps[0]
-            truck_bp.set_attribute("role_name", "target_truck")
-            print(f"[Truck] 🚛 트럭 블루프린트 사용: {cand}")
-            break
-    if not truck_bp:
-        truck_bp = blueprint_library.find("vehicle.volkswagen.t2")
-    
-    truck = world.spawn_actor(truck_bp, spawn_point)
-    truck.set_autopilot(True)  # 트럭은 autopilot으로 돌아다님
-    print(f"[Truck] 트럭이 autopilot 모드로 스폰됨: {spawn_point}")
-    return truck
+
 
 # ---------- MAIN ----------
 def main():
@@ -324,8 +302,8 @@ def main():
     available_spawn_points = world.get_map().get_spawn_points()
     print(f"[System] 사용 가능한 스폰 포인트: {len(available_spawn_points)}개")
     
-    if len(available_spawn_points) < NUM_POLICE + 1:
-        print(f"[Error] 스폰 포인트가 부족합니다. 필요: {NUM_POLICE + 1}, 사용가능: {len(available_spawn_points)}")
+    if len(available_spawn_points) < NUM_POLICE:
+        print(f"[Error] 스폰 포인트가 부족합니다. 필요: {NUM_POLICE}, 사용가능: {len(available_spawn_points)}")
         return
     
     random.shuffle(available_spawn_points)  # 랜덤 섞기
@@ -347,10 +325,6 @@ def main():
             'planner': ChasePlanner(world, sampling_resolution=1.0),
             'unstuck': VehicleUnstuck()
         })
-
-    # 🚛 트럭 스폰 (경찰차들과 다른 위치)
-    truck_spawn = available_spawn_points[NUM_POLICE]  
-    truck = spawn_truck(world, truck_spawn)
     
     # 타이밍 관련 변수들
     PATROL_DURATION = 5.0        # 순찰 5초
@@ -359,8 +333,8 @@ def main():
     start_time = time.time()
     last_updates = [0.0] * NUM_POLICE  # 각 경찰차별 마지막 업데이트 시간
     
-    # 트럭 상태 관리
-    truck_captured = False       # 트럭 포획 여부
+    # 타겟 상태 관리
+    target_captured = False      # 타겟 포획 여부
     CAPTURE_DISTANCE = 10.0      # 포획 거리 (미터)
 
     # Real Zenoh Integration
@@ -400,7 +374,7 @@ def main():
     zen.subscribe_target_location(target_location_cb)
 
     print("[System] 🚔 경찰차들이 5초간 순찰 모드로 시작합니다...")
-    print("[System] 🚛 트럭이 autopilot으로 돌아다니고 있습니다...")
+    print("[System] 🎯 Zenoh를 통한 동적 타겟 위치 대기 중...")
 
     try:
         while True:
@@ -408,46 +382,38 @@ def main():
             now = time.time()
             
             # 차량 생존 상태 확인
-            if not all(p['vehicle'].is_alive for p in police_vehicles) or not truck.is_alive:
-                print("[Error] 차량이 파괴되었습니다. 시뮬레이션을 종료합니다.")
+            if not all(p['vehicle'].is_alive for p in police_vehicles):
+                print("[Error] 경찰차가 파괴되었습니다. 시뮬레이션을 종료합니다.")
                 break
 
             # 🚨 5초 후 자동 lockon 신호 발생
             if not chase_mode_activated and (now - start_time) > PATROL_DURATION:
-                print("[System] ⚡ 5초 경과! 트럭 추적 모드 시작!")
+                print("[System] ⚡ 5초 경과! 타겟 추적 모드 시작!")
                 lockon_cb(True)
-                
-            # 🚛 트럭 autopilot 상태 유지 (포획되지 않았을 때만)
-            if not truck_captured and int(now * 10) % 50 == 0:  # 5초마다 한번씩 autopilot 재설정
-                truck.set_autopilot(True)
-            elif truck_captured:
-                # 포획된 상태에서는 정지 상태 유지
-                truck.apply_control(carla.VehicleControl(throttle=0.0, brake=1.0, steer=0.0))
             
-            # 🚛 트럭 위치 시각화 (추격 모드일 때)
-            if chase_mode_activated:
-                truck_loc = truck.get_location()
-                if truck_captured:
-                    world.debug.draw_string(truck_loc + carla.Location(z=2.0), "🚨 STOPPED", 
+            # 🎯 동적 타겟 위치 시각화 (추격 모드일 때)
+            if chase_mode_activated and dynamic_target_location:
+                if target_captured:
+                    world.debug.draw_string(dynamic_target_location + carla.Location(z=2.0), "🚨 STOPPED", 
                                           draw_shadow=True, color=carla.Color(r=255, g=0, b=0),
                                           life_time=1.0, persistent_lines=False)
                 else:
-                    world.debug.draw_string(truck_loc + carla.Location(z=2.0), "🚛 TARGET", 
+                    world.debug.draw_string(dynamic_target_location + carla.Location(z=2.0), "🎯 TARGET", 
                                           draw_shadow=True, color=carla.Color(r=255, g=255, b=0),
                                           life_time=1.0, persistent_lines=False)
             
             # 🚨 첫 추격 시작시 모든 경찰차가 동적 목적지 포위 작전 개시!
-            if chase_mode_activated and not initial_chase_setup and not truck_captured:
+            if chase_mode_activated and not initial_chase_setup and not target_captured:
                 print("[System] 🚔 동적 목적지 포위 작전 개시! 4대의 경찰차가 포위 위치로 이동 중...")
                 
-                # Use dynamic target location from Zenoh if available, otherwise use truck
+                # Use dynamic target location from Zenoh
                 with target_lock:
                     if dynamic_target_location is not None:
                         target_loc = dynamic_target_location
                         print(f"[System] 🎯 Using Zenoh target location: ({target_loc.x:.2f}, {target_loc.y:.2f})")
                     else:
-                        target_loc = truck.get_location()
-                        print("[System] 🚛 Fallback to truck location (no Zenoh data)")
+                        print("[System] ❌ No Zenoh target data available, waiting...")
+                        continue
                 
                 # Create virtual truck object for calculate_surround_positions
                 class VirtualTarget:
@@ -512,13 +478,13 @@ def main():
                 state.update_from_carla_transform(trans, vel)
 
                 # � 동적 목적지 포위 완성 및 포획 거리 확인
-                if chase_mode_activated and not truck_captured:
-                    # Use dynamic target location if available
+                if chase_mode_activated and not target_captured:
+                    # Use dynamic target location from Zenoh
                     with target_lock:
                         if dynamic_target_location is not None:
                             target_loc = dynamic_target_location
                         else:
-                            target_loc = truck.get_location()
+                            continue  # Skip if no target location available
                     
                     ego_loc = ego.get_location()
                     distance = math.hypot(target_loc.x - ego_loc.x, target_loc.y - ego_loc.y)
@@ -544,17 +510,14 @@ def main():
                         zen.publish_encirclement_status(police_positions, target_loc)
                     
                     if distance <= CAPTURE_DISTANCE:
-                        truck_captured = True
-                        if truck.is_alive:  # Only control if truck exists
-                            truck.set_autopilot(False)  # autopilot 해제
-                            truck.apply_control(carla.VehicleControl(throttle=0.0, brake=1.0, steer=0.0))
-                        print(f"[SUCCESS] 🎉 Police-{idx}이 목적지를 포획했습니다! (거리: {distance:.1f}m)")
+                        target_captured = True
+                        print(f"[SUCCESS] 🎉 Police-{idx}이 타겟 위치를 포획했습니다! (거리: {distance:.1f}m)")
                         world.debug.draw_string(target_loc + carla.Location(z=3.0), "🚨 CAPTURED!", 
                                               draw_shadow=True, color=carla.Color(r=255, g=0, b=0),
                                               life_time=30.0, persistent_lines=True)
 
                 # � 포위 모드일 때 5초 주기로 각 경찰차별 순차 포위 위치 업데이트 (동적 목적지 기반)
-                if chase_mode_activated and not truck_captured:
+                if chase_mode_activated and not target_captured:
                     # 각 경찰차마다 다른 시간에 업데이트 (0, 1.25, 2.5, 3.75초)
                     chase_elapsed = (now - lockon_time) % ROUTE_UPDATE_CYCLE
                     police_update_time = idx * POLICE_UPDATE_OFFSET
@@ -567,7 +530,7 @@ def main():
                             if dynamic_target_location is not None:
                                 current_target_loc = dynamic_target_location
                             else:
-                                current_target_loc = truck.get_location()
+                                continue  # Skip if no Zenoh target location
                         
                         # Create virtual target for current location
                         class VirtualTarget:
@@ -661,10 +624,7 @@ def main():
                 p['vehicle'].destroy()
         print("All police vehicles destroyed safely.")
         
-        # 트럭 정리
-        if truck and truck.is_alive:
-            truck.destroy()
-        print("Target truck destroyed safely.")
+        print("Police encirclement system shutdown complete.")
 
 if __name__ == "__main__":
     main()
