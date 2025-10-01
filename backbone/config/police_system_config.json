@@ -1,0 +1,130 @@
+{
+  "system_name": "Enhanced Police Monitoring System",
+  "version": "2.0.0",
+  "description": "VSS-compliant police vehicle monitoring with KUKSA integration",
+
+  "carla": {
+    "host": "localhost",
+    "port": 2000,
+    "timeout": 10.0,
+    "vehicle_type": "police"
+  },
+
+  "police": {
+    "district": "central",
+    "precinct": "1st Precinct",
+    "units": [
+      {
+        "unit_id": "UNIT-001",
+        "vehicle": {
+          "vin": "1HGCM82633A123456",
+          "brand": "Ford",
+          "model": "Police Interceptor Utility",
+          "year": 2023
+        },
+        "officers": {
+          "primary": {
+            "name": "Officer Johnson",
+            "badge_number": "12345",
+            "rank": "Officer",
+            "shift": "Day"
+          },
+          "secondary": {
+            "name": "Officer Smith",
+            "badge_number": "12346",
+            "rank": "Officer",
+            "shift": "Day"
+          }
+        }
+      },
+      {
+        "unit_id": "UNIT-002",
+        "vehicle": {
+          "vin": "1HGCM82633A789012",
+          "brand": "Chevrolet",
+          "model": "Tahoe PPV",
+          "year": 2023
+        },
+        "officers": {
+          "primary": {
+            "name": "Officer Davis",
+            "badge_number": "12347",
+            "rank": "Sergeant",
+            "shift": "Day"
+          }
+        }
+      }
+    ]
+  },
+
+  "vss": {
+    "enable_validation": true,
+    "schema_file": "vss_police_schema.json",
+    "publish_rate_hz": 2.0,
+    "emergency_check_rate_hz": 10.0
+  },
+
+  "kuksa": {
+    "enable_integration": true,
+    "databroker_endpoint": "http://localhost:55555",
+    "enable_emergency_alerts": true,
+    "alert_cooldown_seconds": 30
+  },
+
+  "zenoh": {
+    "router_config": "transport: {shared_memory: {enabled: true}}",
+    "key_expressions": {
+      "vss_data": "police/{district}/vehicle/{unit_id}/vss",
+      "status": "police/{district}/vehicle/{unit_id}/status",
+      "emergency": "police/{district}/alerts/emergency/{unit_id}",
+      "fleet_status": "police/{district}/fleet/status",
+      "heartbeat": "police/{district}/bridge/heartbeat"
+    }
+  },
+
+  "camera": {
+    "shm_capacity_mb": 64,
+    "compression_quality": 85,
+    "frame_rate_fps": 30,
+    "resolution": {
+      "width": 1920,
+      "height": 1080
+    }
+  },
+
+  "websocket": {
+    "camera_port": 8080,
+    "telemetry_port": 8081,
+    "max_connections": 50,
+    "heartbeat_interval_seconds": 30
+  },
+
+  "dashboard": {
+    "auto_open": true,
+    "refresh_rate_ms": 500,
+    "max_alerts": 20,
+    "emergency_alert_duration_seconds": 30
+  },
+
+  "simulation": {
+    "patrol_route_points": 20,
+    "patrol_radius_km": 1.0,
+    "emergency_scenario_probability": 0.01,
+    "fuel_consumption_rate": 0.001,
+    "service_interval_km": 5000
+  },
+
+  "logging": {
+    "level": "INFO",
+    "enable_file_logging": true,
+    "log_rotation": true,
+    "max_log_size_mb": 100
+  },
+
+  "performance": {
+    "enable_monitoring": true,
+    "stats_interval_seconds": 30,
+    "alert_on_high_latency_ms": 1000,
+    "alert_on_message_drop_rate": 0.05
+  }
+}

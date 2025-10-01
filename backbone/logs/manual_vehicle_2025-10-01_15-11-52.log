@@ -1,0 +1,9 @@
+🚗 Starting Manual Vehicle Control...
+./run_manual_vehicle.sh: line 12: cd: /home/seame/PythonAPI/new_examples /police/main/scripts: No such file or directory
+pygame 2.6.1 (SDL 2.28.4, Python 3.10.12)
+Hello from the pygame community. https://www.pygame.org/contribute.html
+🚗 Manual Vehicle Control initialized
+🚗 Starting Manual Vehicle Control...
+❌ Failed to connect to CARLA: time-out of 10000ms while waiting for the simulator, make sure the simulator is ready and connected to localhost:2000
+🧹 Cleaning up resources...
+✅ Cleanup completed

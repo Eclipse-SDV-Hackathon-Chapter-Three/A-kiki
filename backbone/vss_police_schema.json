@@ -1,0 +1,481 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Police Vehicle VSS Schema",
+  "description": "VSS-compliant schema for police vehicle monitoring system",
+  "type": "object",
+  "properties": {
+    "Vehicle": {
+      "type": "object",
+      "properties": {
+        "VehicleIdentification": {
+          "type": "object",
+          "properties": {
+            "VIN": {
+              "type": "string",
+              "description": "Vehicle Identification Number"
+            },
+            "Model": {
+              "type": "string",
+              "description": "Vehicle model"
+            },
+            "Brand": {
+              "type": "string",
+              "description": "Vehicle brand"
+            },
+            "Police": {
+              "type": "object",
+              "properties": {
+                "UnitNumber": {
+                  "type": "string",
+                  "description": "Police unit identifier (e.g., UNIT-001)"
+                },
+                "District": {
+                  "type": "string",
+                  "description": "Police district assignment"
+                },
+                "Precinct": {
+                  "type": "string",
+                  "description": "Police precinct"
+                }
+              }
+            }
+          }
+        },
+        "CurrentLocation": {
+          "type": "object",
+          "properties": {
+            "Latitude": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90,
+              "description": "Current latitude in degrees"
+            },
+            "Longitude": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180,
+              "description": "Current longitude in degrees"
+            },
+            "Altitude": {
+              "type": "number",
+              "description": "Altitude above sea level in meters"
+            },
+            "Heading": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 359.99,
+              "description": "Vehicle heading in degrees"
+            },
+            "Speed": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Current speed in km/h"
+            },
+            "Timestamp": {
+              "type": "string",
+              "format": "date-time",
+              "description": "GPS timestamp"
+            }
+          }
+        },
+        "Police": {
+          "type": "object",
+          "properties": {
+            "Status": {
+              "type": "object",
+              "properties": {
+                "OnDuty": {
+                  "type": "boolean",
+                  "description": "Is vehicle currently on duty"
+                },
+                "Availability": {
+                  "type": "string",
+                  "enum": ["AVAILABLE", "BUSY", "OUT_OF_SERVICE", "EMERGENCY", "MAINTENANCE"],
+                  "description": "Current availability status"
+                },
+                "LastUpdate": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Last status update timestamp"
+                }
+              }
+            },
+            "Emergency": {
+              "type": "object",
+              "properties": {
+                "Lightbar": {
+                  "type": "object",
+                  "properties": {
+                    "IsActive": {
+                      "type": "boolean",
+                      "description": "Emergency lightbar status"
+                    },
+                    "Pattern": {
+                      "type": "string",
+                      "enum": ["OFF", "CODE1", "CODE2", "CODE3", "TRAFFIC"],
+                      "description": "Light pattern mode"
+                    }
+                  }
+                },
+                "Siren": {
+                  "type": "object",
+                  "properties": {
+                    "IsActive": {
+                      "type": "boolean",
+                      "description": "Siren activation status"
+                    },
+                    "Type": {
+                      "type": "string",
+                      "enum": ["OFF", "WAIL", "YELP", "PHASER", "HORN", "MANUAL"],
+                      "description": "Siren type/tone"
+                    },
+                    "Volume": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100,
+                      "description": "Siren volume percentage"
+                    }
+                  }
+                },
+                "PanicButton": {
+                  "type": "object",
+                  "properties": {
+                    "IsPressed": {
+                      "type": "boolean",
+                      "description": "Emergency panic button status"
+                    },
+                    "Timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Last panic button press time"
+                    }
+                  }
+                }
+              }
+            },
+            "Equipment": {
+              "type": "object",
+              "properties": {
+                "DashCamera": {
+                  "type": "object",
+                  "properties": {
+                    "IsRecording": {
+                      "type": "boolean",
+                      "description": "Dash camera recording status"
+                    },
+                    "StorageUsed": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100,
+                      "description": "Storage usage percentage"
+                    },
+                    "LastIncident": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Last incident recording timestamp"
+                    }
+                  }
+                },
+                "BodyCamera": {
+                  "type": "object",
+                  "properties": {
+                    "Officer1": {
+                      "type": "object",
+                      "properties": {
+                        "IsActive": {
+                          "type": "boolean",
+                          "description": "Officer 1 body camera status"
+                        },
+                        "BatteryLevel": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100,
+                          "description": "Battery level percentage"
+                        }
+                      }
+                    },
+                    "Officer2": {
+                      "type": "object",
+                      "properties": {
+                        "IsActive": {
+                          "type": "boolean",
+                          "description": "Officer 2 body camera status"
+                        },
+                        "BatteryLevel": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 100,
+                          "description": "Battery level percentage"
+                        }
+                      }
+                    }
+                  }
+                },
+                "Radio": {
+                  "type": "object",
+                  "properties": {
+                    "IsActive": {
+                      "type": "boolean",
+                      "description": "Radio transmission status"
+                    },
+                    "Channel": {
+                      "type": "string",
+                      "description": "Current radio channel"
+                    },
+                    "LastTransmission": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Last radio transmission time"
+                    },
+                    "SignalStrength": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100,
+                      "description": "Radio signal strength percentage"
+                    }
+                  }
+                },
+                "MDT": {
+                  "type": "object",
+                  "properties": {
+                    "IsOnline": {
+                      "type": "boolean",
+                      "description": "Mobile Data Terminal online status"
+                    },
+                    "ActiveCall": {
+                      "type": ["object", "null"],
+                      "properties": {
+                        "CallNumber": {
+                          "type": "string",
+                          "description": "Active call/incident number"
+                        },
+                        "Priority": {
+                          "type": "string",
+                          "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+                          "description": "Call priority level"
+                        },
+                        "Type": {
+                          "type": "string",
+                          "description": "Call type (e.g., TRAFFIC STOP, DOMESTIC, BURGLARY)"
+                        },
+                        "StartTime": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "Call start time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "Officer": {
+              "type": "object",
+              "properties": {
+                "Primary": {
+                  "type": "object",
+                  "properties": {
+                    "BadgeNumber": {
+                      "type": "string",
+                      "description": "Primary officer badge number"
+                    },
+                    "Name": {
+                      "type": "string",
+                      "description": "Primary officer name"
+                    },
+                    "ShiftStart": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Shift start time"
+                    },
+                    "Status": {
+                      "type": "string",
+                      "enum": ["ON_DUTY", "OFF_DUTY", "BREAK", "MEAL", "COURT", "TRAINING"],
+                      "description": "Officer status"
+                    }
+                  }
+                },
+                "Secondary": {
+                  "type": "object",
+                  "properties": {
+                    "BadgeNumber": {
+                      "type": "string",
+                      "description": "Secondary officer badge number"
+                    },
+                    "Name": {
+                      "type": "string",
+                      "description": "Secondary officer name"
+                    },
+                    "Status": {
+                      "type": "string",
+                      "enum": ["ON_DUTY", "OFF_DUTY", "BREAK", "MEAL", "COURT", "TRAINING"],
+                      "description": "Officer status"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Body": {
+          "type": "object",
+          "properties": {
+            "Doors": {
+              "type": "object",
+              "properties": {
+                "Row1": {
+                  "type": "object",
+                  "properties": {
+                    "Left": {
+                      "type": "object",
+                      "properties": {
+                        "IsOpen": {
+                          "type": "boolean",
+                          "description": "Driver door status"
+                        },
+                        "IsLocked": {
+                          "type": "boolean",
+                          "description": "Driver door lock status"
+                        }
+                      }
+                    },
+                    "Right": {
+                      "type": "object",
+                      "properties": {
+                        "IsOpen": {
+                          "type": "boolean",
+                          "description": "Passenger door status"
+                        },
+                        "IsLocked": {
+                          "type": "boolean",
+                          "description": "Passenger door lock status"
+                        }
+                      }
+                    }
+                  }
+                },
+                "Row2": {
+                  "type": "object",
+                  "properties": {
+                    "Left": {
+                      "type": "object",
+                      "properties": {
+                        "IsOpen": {
+                          "type": "boolean",
+                          "description": "Rear left door status"
+                        },
+                        "IsLocked": {
+                          "type": "boolean",
+                          "description": "Rear left door lock status"
+                        }
+                      }
+                    },
+                    "Right": {
+                      "type": "object",
+                      "properties": {
+                        "IsOpen": {
+                          "type": "boolean",
+                          "description": "Rear right door status"
+                        },
+                        "IsLocked": {
+                          "type": "boolean",
+                          "description": "Rear right door lock status"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Powertrain": {
+          "type": "object",
+          "properties": {
+            "Engine": {
+              "type": "object",
+              "properties": {
+                "IsRunning": {
+                  "type": "boolean",
+                  "description": "Engine running status"
+                },
+                "RPM": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Engine RPM"
+                },
+                "Temperature": {
+                  "type": "number",
+                  "description": "Engine coolant temperature in Celsius"
+                },
+                "OilPressure": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Engine oil pressure in bar"
+                }
+              }
+            },
+            "FuelSystem": {
+              "type": "object",
+              "properties": {
+                "Level": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100,
+                  "description": "Fuel level percentage"
+                },
+                "Range": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Estimated range in kilometers"
+                }
+              }
+            }
+          }
+        },
+        "Service": {
+          "type": "object",
+          "properties": {
+            "DistanceToService": {
+              "type": "number",
+              "description": "Distance to next service in kilometers"
+            },
+            "TimeToService": {
+              "type": "number",
+              "description": "Time to next service in days"
+            },
+            "IsServiceDue": {
+              "type": "boolean",
+              "description": "Service due indicator"
+            }
+          }
+        },
+        "OBD": {
+          "type": "object",
+          "properties": {
+            "Status": {
+              "type": "object",
+              "properties": {
+                "MIL": {
+                  "type": "boolean",
+                  "description": "Malfunction Indicator Light status"
+                },
+                "DTCCount": {
+                  "type": "number",
+                  "description": "Number of active diagnostic trouble codes"
+                },
+                "DTCs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Active diagnostic trouble codes"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
