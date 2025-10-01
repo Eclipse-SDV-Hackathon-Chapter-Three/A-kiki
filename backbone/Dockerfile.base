@@ -1,0 +1,43 @@
+# Base image for Police Monitoring System Components
+# Includes ROS2 Humble, Python 3.10, and required dependencies
+
+FROM docker.io/library/ros:humble-ros-base-jammy
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
+    git \
+    wget \
+    curl \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages with compatible versions to resolve conflict
+RUN pip3 install --no-cache-dir \
+    eclipse-zenoh==1.0.0 \
+    carla==0.9.15 \
+    jsonschema \
+    websockets \
+    "opencv-python-headless<4.9" \
+    "numpy<2"
+
+# Install ROS2 dependencies
+RUN apt-get update && apt-get install -y \
+    ros-humble-sensor-msgs \
+    ros-humble-std-msgs \
+    ros-humble-cv-bridge \
+    && rm -rf /var/lib/apt/lists/*
+
+# Source ROS2 setup in bashrc
+RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
+
+# Set environment variables
+ENV ROS_DISTRO=humble
+ENV PYTHONUNBUFFERED=1
+ENV ROS_DOMAIN_ID=0
+ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+WORKDIR /workspace
+
+CMD ["/bin/bash"]

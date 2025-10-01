@@ -1,0 +1,15 @@
+# Camera Zenoh Bridge
+FROM localhost/police-base:latest
+
+# Copy application files
+COPY ros2_camera_zenoh_bridge.py /workspace/
+
+# Set working directory
+WORKDIR /workspace
+
+# Health check - verify ROS2 node can be contacted
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD ros2 node list | grep -q ros2_camera_zenoh_bridge || exit 1
+
+# Default command
+CMD ["python3", "/workspace/ros2_camera_zenoh_bridge.py", "--zenoh-mode", "peer"]

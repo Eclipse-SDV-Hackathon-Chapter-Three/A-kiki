@@ -1,0 +1,155 @@
+apiVersion: v0.1
+workloads:
+  # Zenoh Router - Communication middleware
+  zenoh-router:
+    runtime: podman
+    agent: police_agent
+    restartPolicy: ALWAYS
+    tags:
+      - key: component
+        value: middleware
+      - key: system
+        value: police-monitoring
+    runtimeConfig: |
+      image: docker.io/eclipse/zenoh:latest
+      commandOptions: [
+        "--network", "host",
+        "--name", "zenoh-router"
+      ]
+      commandArgs: ["--cfg", "transport:{shared_memory:{enabled:true}}"]
+
+  # CARLA Vehicle Spawner with VSS Data Publisher
+  carla-vss-spawner:
+    runtime: podman
+    agent: police_agent
+    restartPolicy: ON_FAILURE
+    dependencies:
+      zenoh-router: ADD_COND_RUNNING
+    tags:
+      - key: component
+        value: vehicle-sim
+      - key: system
+        value: police-monitoring
+    runtimeConfig: |
+      image: localhost/police-carla-spawner:latest
+      commandOptions: [
+        "--network", "host",
+        "--name", "carla-vss-spawner",
+        "-v", "/home/seame/Workspace/ros-bridge/Carla_ROS2_KUKSA_ZENOH_WEB:/workspace:Z",
+        "-e", "ROS_DOMAIN_ID=0",
+        "-e", "RMW_IMPLEMENTATION=rmw_fastrtps_cpp",
+        "-e", "PYTHONUNBUFFERED=1"
+      ]
+      commandArgs: ["python3", "/workspace/carla_vehicle_spawner.py"]
+
+  # KUKSA-Zenoh Bridge - VSS Data Bridge
+  kuksa-zenoh-bridge:
+    runtime: podman
+    agent: police_agent
+    restartPolicy: ON_FAILURE
+    dependencies:
+      zenoh-router: ADD_COND_RUNNING
+      carla-vss-spawner: ADD_COND_RUNNING
+    tags:
+      - key: component
+        value: data-bridge
+      - key: system
+        value: police-monitoring
+    runtimeConfig: |
+      image: localhost/police-kuksa-bridge:latest
+      commandOptions: [
+        "--network", "host",
+        "--name", "kuksa-zenoh-bridge",
+        "-v", "/home/seame/Workspace/ros-bridge/Carla_ROS2_KUKSA_ZENOH_WEB:/workspace:Z",
+        "-e", "ROS_DOMAIN_ID=0",
+        "-e", "RMW_IMPLEMENTATION=rmw_fastrtps_cpp",
+        "-e", "PYTHONUNBUFFERED=1"
+      ]
+      commandArgs: [
+        "python3", "/workspace/kuksa_zenoh_bridge.py",
+        "--ros-args",
+        "-p", "police_district:=central",
+        "-p", "enable_data_validation:=true",
+        "-p", "emergency_alert_topics:=true"
+      ]
+
+  # Camera Zenoh Bridge - Camera Stream Bridge
+  camera-zenoh-bridge:
+    runtime: podman
+    agent: police_agent
+    restartPolicy: ON_FAILURE
+    dependencies:
+      zenoh-router: ADD_COND_RUNNING
+      carla-vss-spawner: ADD_COND_RUNNING
+    tags:
+      - key: component
+        value: camera-bridge
+      - key: system
+        value: police-monitoring
+    runtimeConfig: |
+      image: localhost/police-camera-bridge:latest
+      commandOptions: [
+        "--network", "host",
+        "--name", "camera-zenoh-bridge",
+        "-v", "/home/seame/Workspace/ros-bridge/Carla_ROS2_KUKSA_ZENOH_WEB:/workspace:Z",
+        "-e", "ROS_DOMAIN_ID=0",
+        "-e", "RMW_IMPLEMENTATION=rmw_fastrtps_cpp",
+        "-e", "PYTHONUNBUFFERED=1"
+      ]
+      commandArgs: [
+        "bash", "-c", "sleep 2 && python3 /workspace/ros2_camera_zenoh_bridge.py --zenoh-mode peer"
+      ]
+
+  # Camera WebSocket Server - Web Frontend Camera Stream
+  camera-websocket:
+    runtime: podman
+    agent: police_agent
+    restartPolicy: ON_FAILURE
+    dependencies:
+      zenoh-router: ADD_COND_RUNNING
+      camera-zenoh-bridge: ADD_COND_RUNNING
+    tags:
+      - key: component
+        value: web-interface
+      - key: system
+        value: police-monitoring
+    runtimeConfig: |
+      image: localhost/police-websocket:latest
+      commandOptions: [
+        "--network", "host",
+        "--name", "camera-websocket",
+        "-v", "/home/seame/Workspace/ros-bridge/Carla_ROS2_KUKSA_ZENOH_WEB:/workspace:Z",
+        "-e", "PYTHONUNBUFFERED=1"
+      ]
+      commandArgs: [
+        "python3", "/workspace/camera_websocket_server.py",
+        "--port", "8080",
+        "--zenoh-mode", "peer"
+      ]
+
+  # Police VSS WebSocket Bridge - Web Frontend VSS Data
+  police-websocket:
+    runtime: podman
+    agent: police_agent
+    restartPolicy: ON_FAILURE
+    dependencies:
+      zenoh-router: ADD_COND_RUNNING
+      kuksa-zenoh-bridge: ADD_COND_RUNNING
+    tags:
+      - key: component
+        value: web-interface
+      - key: system
+        value: police-monitoring
+    runtimeConfig: |
+      image: localhost/police-websocket:latest
+      commandOptions: [
+        "--network", "host",
+        "--name", "police-websocket",
+        "-v", "/home/seame/Workspace/ros-bridge/Carla_ROS2_KUKSA_ZENOH_WEB:/workspace:Z",
+        "-e", "PYTHONUNBUFFERED=1"
+      ]
+      commandArgs: [
+        "python3", "/workspace/police_websocket_bridge.py",
+        "--port", "8081",
+        "--district", "central"
+      ]

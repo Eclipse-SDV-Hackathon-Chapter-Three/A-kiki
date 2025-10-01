@@ -1,0 +1,16 @@
+# CARLA Vehicle Spawner with VSS Data Publisher
+FROM localhost/police-base:latest
+
+# Copy application files
+COPY carla_vehicle_spawner.py /workspace/
+COPY vss_police_schema.json /workspace/
+
+# Set working directory
+WORKDIR /workspace
+
+# Health check - verify ROS2 node can be contacted
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD ros2 node list | grep -q carla_vehicle_spawner || exit 1
+
+# Default command
+CMD ["python3", "/workspace/carla_vehicle_spawner.py"]
