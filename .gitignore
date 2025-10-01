@@ -1,0 +1,40 @@
+# Build artifacts and compiled files
+build/
+install/
+target/
+*.egg-info/
+*.egg
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Log files
+*.log
+logs/
+main/
+# IDE and editor specific files
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+
+# Operating System specific files
+.DS_Store
+Thumbs.db
+
+# Dependencies and submodules
+# Ignoring zenoh-c as it appears to be a submodule or external dependency
+zenoh-c/
+
+# Virtual environments
+.env
+.venv
+venv/
+ENV/
+
+# Ankaios temporary logs
+/tmp/ankaios-*.log
