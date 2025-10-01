@@ -1,8 +1,10 @@
-# police_control_mock_multi_spawn.py
 import carla
 import time
 import random
 import math
+import zenoh
+import json
+import threading
 def calculate_surround_positions(truck, prediction_time=3.0):
     """
     🚔 트럭 포위 작전: 4대의 경찰차가 트럭을 둘러싸는 위치 계산
@@ -72,24 +74,7 @@ def calculate_surround_positions(truck, prediction_time=3.0):
     
     return positions
 
-def predict_target_location(truck, prediction_time=3.0, police_location=None):
-    """
-    트럭의 현재 위치와 속도를 기반으로 예측 위치 계산 (호환성용)
-    """
-    current_loc = truck.get_location()
-    velocity = truck.get_velocity()
-    
-    if police_location:
-        distance = math.hypot(current_loc.x - police_location.x, current_loc.y - police_location.y)
-        prediction_time = min(5.0, max(2.0, distance / 20.0))
-    
-    predicted_x = current_loc.x + velocity.x * prediction_time
-    predicted_y = current_loc.y + velocity.y * prediction_time
-    predicted_z = current_loc.z
-    
-    return carla.Location(x=predicted_x, y=predicted_y, z=predicted_z)
-
-def visualize_planner_route(world, route, life_time=60.0):
+def visualize_planner_route(world, route, life_time=5.0):
     for loc in route:
         carla_loc = carla.Location(x=loc[0], y=loc[1], z=loc[2] + 0.5)
         world.debug.draw_string(
@@ -115,29 +100,178 @@ MAX_THROTTLE = 1.0
 TARGET_SPEED = 15.0
 NUM_POLICE = 4
 
-# ---------- MOCK ZENOH ----------
-class MockZenoh:
+# ---------- REAL ZENOH INTEGRATION ----------
+class ZenohPoliceInterface:
     def __init__(self):
+        self.session = None
         self.lockon_cb = None
-        self.waypoints_cb = None
+        self.target_location_cb = None
+        self.latest_target_location = None
+        self.lock = threading.Lock()
+        
+        # Initialize Zenoh session
+        try:
+            config = zenoh.Config()
+            self.session = zenoh.open(config)
+            print("[ZenohPoliceInterface] ✅ Connected to Zenoh network")
+        except Exception as e:
+            print(f"[ZenohPoliceInterface] ❌ Failed to connect to Zenoh: {e}")
+            self.session = None
 
     def subscribe_lockon(self, cb):
+        """Subscribe to lock-on signals from chase police team"""
         self.lockon_cb = cb
+        if self.session:
+            try:
+                # Subscribe to emergency/pursuit signals
+                sub = self.session.declare_subscriber(
+                    "police/emergency/lockon", 
+                    self._handle_lockon_signal
+                )
+                print("[ZenohPoliceInterface] 📡 Subscribed to police/emergency/lockon")
+            except Exception as e:
+                print(f"[ZenohPoliceInterface] ❌ Failed to subscribe lockon: {e}")
 
-    def subscribe_waypoints(self, cb):
-        self.waypoints_cb = cb
+    def subscribe_target_location(self, cb):
+        """Subscribe to target vehicle location from chase police team"""
+        self.target_location_cb = cb
+        if self.session:
+            try:
+                # Subscribe to target vehicle VSS data
+                sub = self.session.declare_subscriber(
+                    "police/target/location", 
+                    self._handle_target_location
+                )
+                print("[ZenohPoliceInterface] 📡 Subscribed to police/target/location")
+                
+                # Also subscribe to VSS vehicle position data
+                sub_vss = self.session.declare_subscriber(
+                    "vehicle/currentlocation", 
+                    self._handle_vss_location
+                )
+                print("[ZenohPoliceInterface] 📡 Subscribed to vehicle/currentlocation")
+            except Exception as e:
+                print(f"[ZenohPoliceInterface] ❌ Failed to subscribe target location: {e}")
 
-    def publish_mock_data(self):
-        if self.lockon_cb:
-            self.lockon_cb(True)
-        if self.waypoints_cb:
-            self.waypoints_cb([{'x': 100.0, 'y': 100.0, 'v': 10.0}])
+    def _handle_lockon_signal(self, sample):
+        """Handle incoming lock-on signals"""
+        try:
+            data = json.loads(sample.payload.decode('utf-8'))
+            lockon_status = data.get('lockon', False)
+            
+            print(f"[ZenohPoliceInterface] 🚨 Lock-on signal received: {lockon_status}")
+            
+            if self.lockon_cb:
+                self.lockon_cb(lockon_status)
+                
+        except Exception as e:
+            print(f"[ZenohPoliceInterface] ❌ Error handling lockon signal: {e}")
+
+    def _handle_target_location(self, sample):
+        """Handle target vehicle location updates"""
+        try:
+            data = json.loads(sample.payload.decode('utf-8'))
+            
+            # Extract coordinates from the data
+            x = data.get('x', 0.0)
+            y = data.get('y', 0.0) 
+            z = data.get('z', 0.0)
+            
+            with self.lock:
+                self.latest_target_location = carla.Location(x=x, y=y, z=z)
+            
+            print(f"[ZenohPoliceInterface] 🎯 Target location updated: ({x:.2f}, {y:.2f}, {z:.2f})")
+            
+            if self.target_location_cb:
+                self.target_location_cb(self.latest_target_location)
+                
+        except Exception as e:
+            print(f"[ZenohPoliceInterface] ❌ Error handling target location: {e}")
+
+    def _handle_vss_location(self, sample):
+        """Handle VSS vehicle location data"""
+        try:
+            data = json.loads(sample.payload.decode('utf-8'))
+            
+            # VSS format: Vehicle.CurrentLocation.Latitude/Longitude
+            if 'CurrentLocation' in data:
+                # Convert GPS to CARLA coordinates (simplified)
+                lat = data['CurrentLocation'].get('Latitude', 0.0)
+                lon = data['CurrentLocation'].get('Longitude', 0.0)
+                alt = data['CurrentLocation'].get('Altitude', 0.0)
+                
+                # Simple GPS to CARLA coordinate conversion
+                # (In real implementation, use proper GPS->UTM->CARLA conversion)
+                x = (lon + 180) * 1000  # Simplified conversion
+                y = (lat + 90) * 1000   # Simplified conversion
+                z = alt
+                
+                with self.lock:
+                    self.latest_target_location = carla.Location(x=x, y=y, z=z)
+                
+                print(f"[ZenohPoliceInterface] 🌍 VSS location: GPS({lat:.6f}, {lon:.6f}) → CARLA({x:.2f}, {y:.2f})")
+                
+                if self.target_location_cb:
+                    self.target_location_cb(self.latest_target_location)
+                    
+        except Exception as e:
+            print(f"[ZenohPoliceInterface] ❌ Error handling VSS location: {e}")
+
+    def get_latest_target_location(self):
+        """Get the most recent target location"""
+        with self.lock:
+            return self.latest_target_location
+
+    def publish_encirclement_status(self, police_positions, target_location):
+        """Publish encirclement status back to the network"""
+        if not self.session:
+            return
+            
+        try:
+            status_data = {
+                "timestamp": time.time(),
+                "target_location": {
+                    "x": target_location.x,
+                    "y": target_location.y,
+                    "z": target_location.z
+                },
+                "police_units": []
+            }
+            
+            for i, pos in enumerate(police_positions):
+                police_data = {
+                    "unit_id": f"ENCIRCLE-{i:03d}",
+                    "position": {
+                        "x": pos.x,
+                        "y": pos.y, 
+                        "z": pos.z
+                    },
+                    "role": ["FRONT", "REAR", "LEFT", "RIGHT"][i % 4]
+                }
+                status_data["police_units"].append(police_data)
+            
+            # Publish encirclement status
+            self.session.put(
+                "police/encirclement/status", 
+                json.dumps(status_data).encode('utf-8')
+            )
+            
+            print(f"[ZenohPoliceInterface] 📤 Published encirclement status: {len(police_positions)} units")
+            
+        except Exception as e:
+            print(f"[ZenohPoliceInterface] ❌ Error publishing status: {e}")
+
+    def close(self):
+        """Clean up Zenoh connection"""
+        if self.session:
+            self.session.close()
+            print("[ZenohPoliceInterface] 🔌 Zenoh session closed")
+
 
 # ---------- CARLA HELPERS ----------
 def connect_carla(host=CARLA_HOST, port=CARLA_PORT, timeout=10.0):
     client = carla.Client(host, port)
     client.set_timeout(timeout)
-    #world = client.load_world("Town02")
     world = client.get_world()
     return client, world
 
@@ -184,18 +318,6 @@ def spawn_truck(world, spawn_point):
     print(f"[Truck] 트럭이 autopilot 모드로 스폰됨: {spawn_point}")
     return truck
 
-def visualize_planner_route(world, route, life_time=5.0):
-    for loc in route:
-        carla_loc = carla.Location(x=loc[0], y=loc[1], z=loc[2] + 0.5)
-        world.debug.draw_string(
-            carla_loc,
-            "O",
-            draw_shadow=False,
-            color=carla.Color(0, 255, 0),
-            life_time=life_time,
-            persistent_lines=True,
-        )
-
 # ---------- MAIN ----------
 def main():
     client, world = connect_carla()
@@ -241,10 +363,15 @@ def main():
     truck_captured = False       # 트럭 포획 여부
     CAPTURE_DISTANCE = 10.0      # 포획 거리 (미터)
 
-    zen = MockZenoh()
+    # Real Zenoh Integration
+    zen = ZenohPoliceInterface()
     chase_mode_activated = False  # 한번 활성화되면 계속 유지
     initial_chase_setup = False   # 첫 추격 경로 설정 여부
     lockon_time = None
+    
+    # Dynamic target tracking
+    dynamic_target_location = None
+    target_lock = threading.Lock()
 
     # Zenoh callbacks
     def lockon_cb(val):
@@ -261,15 +388,16 @@ def main():
             for p in police_vehicles:
                 p['state'].lockon = True
 
-    def wps_cb(wps_list):
-        # 트럭 추적 모드에서는 waypoints 콜백 무시
-        if not chase_mode_activated:
-            for p in police_vehicles:
-                p['wpm'].set_waypoints([(wp['x'], wp['y'], wp.get('v', TARGET_SPEED)) for wp in wps_list])
-            print("[MockZenoh] waypoints updated")
+    def target_location_cb(target_loc):
+        """Handle dynamic target location updates from Zenoh"""
+        nonlocal dynamic_target_location
+        with target_lock:
+            dynamic_target_location = target_loc
+        print(f"[System] 🎯 Dynamic target location updated: ({target_loc.x:.2f}, {target_loc.y:.2f}, {target_loc.z:.2f})")
 
+    # Subscribe to Zenoh topics
     zen.subscribe_lockon(lockon_cb)
-    zen.subscribe_waypoints(wps_cb)
+    zen.subscribe_target_location(target_location_cb)
 
     print("[System] 🚔 경찰차들이 5초간 순찰 모드로 시작합니다...")
     print("[System] 🚛 트럭이 autopilot으로 돌아다니고 있습니다...")
@@ -308,11 +436,37 @@ def main():
                                           draw_shadow=True, color=carla.Color(r=255, g=255, b=0),
                                           life_time=1.0, persistent_lines=False)
             
-            # 🚨 첫 추격 시작시 모든 경찰차가 트럭 포위 작전 개시!
+            # 🚨 첫 추격 시작시 모든 경찰차가 동적 목적지 포위 작전 개시!
             if chase_mode_activated and not initial_chase_setup and not truck_captured:
-                print("[System] 🚔 트럭 포위 작전 개시! 4대의 경찰차가 포위 위치로 이동 중...")
-                truck_loc = truck.get_location()
-                surround_positions = calculate_surround_positions(truck, prediction_time=3.0)
+                print("[System] 🚔 동적 목적지 포위 작전 개시! 4대의 경찰차가 포위 위치로 이동 중...")
+                
+                # Use dynamic target location from Zenoh if available, otherwise use truck
+                with target_lock:
+                    if dynamic_target_location is not None:
+                        target_loc = dynamic_target_location
+                        print(f"[System] 🎯 Using Zenoh target location: ({target_loc.x:.2f}, {target_loc.y:.2f})")
+                    else:
+                        target_loc = truck.get_location()
+                        print("[System] 🚛 Fallback to truck location (no Zenoh data)")
+                
+                # Create virtual truck object for calculate_surround_positions
+                class VirtualTarget:
+                    def __init__(self, location):
+                        self._location = location
+                        self._velocity = carla.Vector3D(0, 0, 0)  # Assume stationary for now
+                        self._transform = carla.Transform(location, carla.Rotation())
+                        
+                    def get_location(self):
+                        return self._location
+                        
+                    def get_velocity(self):
+                        return self._velocity
+                        
+                    def get_transform(self):
+                        return self._transform
+                
+                virtual_target = VirtualTarget(target_loc)
+                surround_positions = calculate_surround_positions(virtual_target, prediction_time=3.0)
                 
                 # 포위 위치들 시각화
                 position_names = ["🔴 FRONT", "🔵 REAR", "🟢 LEFT", "🟡 RIGHT"]
@@ -357,37 +511,49 @@ def main():
                 speed = math.sqrt(vel.x**2 + vel.y**2)
                 state.update_from_carla_transform(trans, vel)
 
-                # � 트럭 포위 완성 및 포획 거리 확인
+                # � 동적 목적지 포위 완성 및 포획 거리 확인
                 if chase_mode_activated and not truck_captured:
-                    truck_loc = truck.get_location()
+                    # Use dynamic target location if available
+                    with target_lock:
+                        if dynamic_target_location is not None:
+                            target_loc = dynamic_target_location
+                        else:
+                            target_loc = truck.get_location()
+                    
                     ego_loc = ego.get_location()
-                    distance = math.hypot(truck_loc.x - ego_loc.x, truck_loc.y - ego_loc.y)
+                    distance = math.hypot(target_loc.x - ego_loc.x, target_loc.y - ego_loc.y)
                     
                     # 🎯 포위 완성도 체크 (모든 경찰차가 30m 이내에 있는지)
                     all_distances = []
+                    police_positions = []
                     for p_check in police_vehicles:
                         p_loc = p_check['vehicle'].get_location()
-                        p_distance = math.hypot(truck_loc.x - p_loc.x, truck_loc.y - p_loc.y)
+                        p_distance = math.hypot(target_loc.x - p_loc.x, target_loc.y - p_loc.y)
                         all_distances.append(p_distance)
+                        police_positions.append(p_loc)
                     
                     surround_complete = all([d <= 30.0 for d in all_distances])
                     if surround_complete and idx == 0:  # 첫 번째 경찰차에서만 체크
-                        world.debug.draw_string(truck_loc + carla.Location(z=4.0), 
+                        world.debug.draw_string(target_loc + carla.Location(z=4.0), 
                                               "🚔 SURROUNDED! 🚔", 
                                               draw_shadow=True, 
                                               color=carla.Color(r=255, g=0, b=255),
                                               life_time=2.0, persistent_lines=False)
+                        
+                        # Publish encirclement status to Zenoh
+                        zen.publish_encirclement_status(police_positions, target_loc)
                     
                     if distance <= CAPTURE_DISTANCE:
                         truck_captured = True
-                        truck.set_autopilot(False)  # autopilot 해제
-                        truck.apply_control(carla.VehicleControl(throttle=0.0, brake=1.0, steer=0.0))
-                        print(f"[SUCCESS] 🎉 Police-{idx}이 트럭을 포획했습니다! (거리: {distance:.1f}m)")
-                        world.debug.draw_string(truck_loc + carla.Location(z=3.0), "🚨 CAPTURED!", 
+                        if truck.is_alive:  # Only control if truck exists
+                            truck.set_autopilot(False)  # autopilot 해제
+                            truck.apply_control(carla.VehicleControl(throttle=0.0, brake=1.0, steer=0.0))
+                        print(f"[SUCCESS] 🎉 Police-{idx}이 목적지를 포획했습니다! (거리: {distance:.1f}m)")
+                        world.debug.draw_string(target_loc + carla.Location(z=3.0), "🚨 CAPTURED!", 
                                               draw_shadow=True, color=carla.Color(r=255, g=0, b=0),
                                               life_time=30.0, persistent_lines=True)
 
-                # � 포위 모드일 때 5초 주기로 각 경찰차별 순차 포위 위치 업데이트
+                # � 포위 모드일 때 5초 주기로 각 경찰차별 순차 포위 위치 업데이트 (동적 목적지 기반)
                 if chase_mode_activated and not truck_captured:
                     # 각 경찰차마다 다른 시간에 업데이트 (0, 1.25, 2.5, 3.75초)
                     chase_elapsed = (now - lockon_time) % ROUTE_UPDATE_CYCLE
@@ -396,8 +562,31 @@ def main():
                     if abs(chase_elapsed - police_update_time) < 0.1 and (now - last_updates[idx]) >= (ROUTE_UPDATE_CYCLE - 0.2):
                         origin = ego.get_location()
                         
-                        # 🚔 트럭 포위 위치 재계산 (실시간 업데이트)
-                        surround_positions = calculate_surround_positions(truck, prediction_time=3.0)
+                        # 🎯 동적 목적지 기반 포위 위치 재계산 (실시간 업데이트)
+                        with target_lock:
+                            if dynamic_target_location is not None:
+                                current_target_loc = dynamic_target_location
+                            else:
+                                current_target_loc = truck.get_location()
+                        
+                        # Create virtual target for current location
+                        class VirtualTarget:
+                            def __init__(self, location):
+                                self._location = location
+                                self._velocity = carla.Vector3D(0, 0, 0)
+                                self._transform = carla.Transform(location, carla.Rotation())
+                                
+                            def get_location(self):
+                                return self._location
+                                
+                            def get_velocity(self):
+                                return self._velocity
+                                
+                            def get_transform(self):
+                                return self._transform
+                        
+                        virtual_target = VirtualTarget(current_target_loc)
+                        surround_positions = calculate_surround_positions(virtual_target, prediction_time=3.0)
                         target_position = surround_positions[idx % len(surround_positions)]
                         
                         # 포위 위치 시각화
@@ -426,9 +615,6 @@ def main():
                     ego.apply_control(unstuck_control)
                     continue  # unstuck 중이면 PID/Stanley 스킵
 
-                # waypoint 재계산 (트럭 추적 중이 아닐 때만)
-                # 트럭 추적은 위에서 1초마다 자동으로 처리되므로 여기서는 스킵
-                pass
                 # 🚔 경찰차 모드 제어: 순찰 vs 추격
                 if not chase_mode_activated:
                     # 순찰 모드: autopilot 활성화
@@ -466,6 +652,9 @@ def main():
     except KeyboardInterrupt:
         print("Shutting down police_control.")
     finally:
+        # Zenoh 연결 정리
+        zen.close()
+        
         # 경찰차들 정리
         for p in police_vehicles:
             if p['vehicle'].is_alive:
@@ -473,7 +662,7 @@ def main():
         print("All police vehicles destroyed safely.")
         
         # 트럭 정리
-        if truck.is_alive:
+        if truck and truck.is_alive:
             truck.destroy()
         print("Target truck destroyed safely.")
 

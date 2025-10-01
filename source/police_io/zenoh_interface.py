@@ -72,6 +72,19 @@ class ZenohInterface:
                 lambda sample: callback(json.loads(sample.payload.decode()))
             )
 
+    def subscribe_target_vehicle_position(self, callback):
+        """
+        동민이가 보내는 실시간 차량 위치 구독
+        callback(dict): {'x': float, 'y': float, 'z': float, 'vx': float, 'vy': float, 'timestamp': float}
+        """
+        if self.use_mock:
+            self._mock.subscribe("vehicles/target_position", lambda p: callback(p))
+        else:
+            self._session.declare_subscriber(
+                "vehicles/target_position",
+                lambda sample: callback(json.loads(sample.payload.decode()))
+            )
+
     # ---------------- Publishers ----------------
     def publish_state(self, state_dict):
         if self.use_mock:
