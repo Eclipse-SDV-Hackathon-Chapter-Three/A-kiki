@@ -38,3 +38,4 @@ ENV/
 
 # Ankaios temporary logs
 /tmp/ankaios-*.log
+kuksa_zenoh_bridge.py

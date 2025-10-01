@@ -21,11 +21,68 @@ import zenoh
 import json
 import time
 from datetime import datetime, timezone
-import jsonschema
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 import logging
-import asyncio
-import threading
+import requests
+from requests import Session
+
+class KuksaDatabrokerClient:
+    """Minimal HTTP client for Kuksa Databroker validation."""
+
+    def __init__(self, host: str, port: int, use_tls: bool = False,
+                 token: Optional[str] = None, logger: Optional[logging.Logger] = None) -> None:
+        self.logger = logger or logging.getLogger(__name__)
+        self.base_url = f"{'https' if use_tls else 'http'}://{host}:{port}"
+        self.token = token or ''
+        self.session: Session = requests.Session()
+        if self.token:
+            self.session.headers.update({'Authorization': f'Bearer {self.token}'})
+        self.session.headers.update({'Content-Type': 'application/json'})
+
+    def validate(self, entries: List[Tuple[str, Any]]) -> Optional[bool]:
+        if not entries:
+            return True
+
+        payload = {
+            'updates': [
+                {
+                    'path': path,
+                    'value': self._encode_value(value)
+                }
+                for path, value in entries
+            ]
+        }
+
+        try:
+            response = self.session.post(
+                f"{self.base_url}/databroker/v1/values",
+                json=payload,
+                timeout=3
+            )
+            if response.status_code >= 400:
+                self.logger.warning(
+                    "Kuksa Databroker validation failed (status %s): %s",
+                    response.status_code,
+                    response.text[:200]
+                )
+                return False
+            return True
+        except requests.RequestException as exc:
+            self.logger.warning("Could not reach Kuksa Databroker: %s", exc)
+            return None
+
+    @staticmethod
+    def _encode_value(value: Any) -> Dict[str, Any]:
+        if isinstance(value, bool):
+            return {'bool': value}
+        if isinstance(value, int):
+            return {'int': value}
+        if isinstance(value, float):
+            return {'float': value}
+        if isinstance(value, str):
+            return {'string': value}
+        return {'string': json.dumps(value)}
+
 
 class KuksaZenohBridge(Node):
     def __init__(self):
@@ -36,18 +93,37 @@ class KuksaZenohBridge(Node):
         self.declare_parameter('police_district', 'central')
         self.declare_parameter('enable_data_validation', True)
         self.declare_parameter('emergency_alert_topics', True)
+        self.declare_parameter('use_kuksa_databroker', True)
+        self.declare_parameter('kuksa_host', '127.0.0.1')
+        self.declare_parameter('kuksa_port', 55555)
+        self.declare_parameter('kuksa_use_tls', False)
+        self.declare_parameter('kuksa_token', '')
 
         # Initialize zenoh session
         self._init_zenoh_session()
 
-        # Load VSS schema for validation
-        self.vss_schema = self._load_vss_schema()
+        # Optional Kuksa Databroker client
+        self.databroker_client = self._init_databroker_client()
+        self._databroker_unavailable_logged = False
+        if (self.get_parameter('enable_data_validation').get_parameter_value().bool_value and
+                not self.databroker_client):
+            self.get_logger().error(
+                "Data validation is enabled but Kuksa Databroker client could not be initialised; "
+                "incoming messages will be dropped."
+            )
 
         # ROS2 subscribers
         self.vss_subscriber = self.create_subscription(
             String,
             'police/vss_data',
             self.handle_vss_data,
+            10
+        )
+
+        self.status_subscriber = self.create_subscription(
+            String,
+            'police/status',
+            self.handle_status_data,
             10
         )
 
@@ -100,33 +176,102 @@ class KuksaZenohBridge(Node):
             self.get_logger().error(f"Failed to initialize zenoh session: {e}")
             raise
 
-    def _load_vss_schema(self) -> Optional[Dict]:
-        """Load VSS schema for data validation"""
+    def _init_databroker_client(self) -> Optional[KuksaDatabrokerClient]:
+        """Initialise optional Kuksa Databroker client for VSS validation."""
+        use_databroker = self.get_parameter('use_kuksa_databroker').get_parameter_value().bool_value
+        if not use_databroker:
+            return None
+
+        host = self.get_parameter('kuksa_host').get_parameter_value().string_value
+        port = self.get_parameter('kuksa_port').get_parameter_value().integer_value
+        use_tls = self.get_parameter('kuksa_use_tls').get_parameter_value().bool_value
+        token = self.get_parameter('kuksa_token').get_parameter_value().string_value
+
         try:
-            schema_path = 'vss_police_schema.json'
-            with open(schema_path, 'r') as f:
-                schema = json.load(f)
-            self.get_logger().info("VSS schema loaded for validation")
-            return schema
-        except Exception as e:
-            self.get_logger().warning(f"Could not load VSS schema: {e}")
+            client = KuksaDatabrokerClient(host, port, use_tls=use_tls, token=token, logger=self.get_logger())
+            self.get_logger().info(
+                "Kuksa Databroker validation enabled (%s:%s, tls=%s)",
+                host, port, use_tls
+            )
+            return client
+        except Exception as exc:  # pragma: no cover - defensive
+            self.get_logger().warning(f"Failed to initialise Kuksa Databroker client: {exc}")
             return None
 
     def _validate_vss_data(self, data: Dict[str, Any]) -> bool:
-        """Validate VSS data against schema"""
-        if not self.vss_schema or not self.get_parameter('enable_data_validation').get_parameter_value().bool_value:
+        """Validate VSS data by pushing it to Kuksa Databroker."""
+        if not self.get_parameter('enable_data_validation').get_parameter_value().bool_value:
             return True
 
-        try:
-            jsonschema.validate(data, self.vss_schema)
-            return True
-        except jsonschema.ValidationError as e:
+        if not self.databroker_client:
+            if not self._databroker_unavailable_logged:
+                self.get_logger().error(
+                    "Kuksa Databroker validation requested but client not configured; dropping message"
+                )
+                self._databroker_unavailable_logged = True
             self.stats['validation_errors'] += 1
-            self.get_logger().warning(f"VSS data validation failed: {e.message}")
             return False
-        except Exception as e:
-            self.get_logger().error(f"Validation error: {e}")
+
+        updates = self._extract_databroker_updates(data)
+        if not updates:
+            self.get_logger().warning(
+                'No Kuksa Databroker paths derived from VSS payload; dropping message'
+            )
+            self.stats['validation_errors'] += 1
             return False
+
+        validation_result = self.databroker_client.validate(updates)
+        if validation_result is True:
+            self._databroker_unavailable_logged = False
+            return True
+
+        self.stats['validation_errors'] += 1
+        if validation_result is False:
+            self.get_logger().warning('Kuksa Databroker rejected VSS payload; dropping message')
+        else:
+            self.get_logger().error('Failed to reach Kuksa Databroker; dropping message')
+        return False
+
+    def _extract_databroker_updates(self, vss_data: Dict[str, Any]) -> List[Tuple[str, Any]]:
+        """Map VSS payload to a list of (path, value) for Databroker validation."""
+        vehicle = vss_data.get('Vehicle', {})
+        location = vehicle.get('CurrentLocation', {})
+        chassis = vehicle.get('Chassis', {})
+        accelerator = chassis.get('Accelerator', {})
+        brake = chassis.get('Brake', {})
+        steering = chassis.get('SteeringWheel', {})
+        police = vehicle.get('Police', {})
+        status = police.get('Status', {})
+        powertrain = vehicle.get('Powertrain', {})
+        engine = powertrain.get('Engine', {})
+        fuel = powertrain.get('FuelSystem', {})
+        service = vehicle.get('Service', {})
+        obd = vehicle.get('OBD', {}).get('Status', {})
+
+        updates: List[Tuple[str, Any]] = []
+
+        def add_if_present(container: Dict[str, Any], key: str, path: str) -> None:
+            if key in container and container[key] is not None:
+                updates.append((path, container[key]))
+
+        add_if_present(vehicle, 'Speed', 'Vehicle.Speed')
+        add_if_present(location, 'Speed', 'Vehicle.CurrentLocation.Speed')
+        add_if_present(location, 'Latitude', 'Vehicle.CurrentLocation.Latitude')
+        add_if_present(location, 'Longitude', 'Vehicle.CurrentLocation.Longitude')
+        add_if_present(location, 'Heading', 'Vehicle.CurrentLocation.Heading')
+        add_if_present(accelerator, 'PedalPosition', 'Vehicle.Chassis.Accelerator.PedalPosition')
+        add_if_present(brake, 'PedalPosition', 'Vehicle.Chassis.Brake.PedalPosition')
+        add_if_present(steering, 'Angle', 'Vehicle.Chassis.SteeringWheel.Angle')
+        add_if_present(status, 'Availability', 'Vehicle.Police.Status.Availability')
+        add_if_present(engine, 'IsRunning', 'Vehicle.Powertrain.Engine.IsRunning')
+        add_if_present(engine, 'RPM', 'Vehicle.Powertrain.Engine.RPM')
+        add_if_present(fuel, 'Level', 'Vehicle.Powertrain.FuelSystem.Level')
+        add_if_present(fuel, 'Range', 'Vehicle.Powertrain.FuelSystem.Range')
+        add_if_present(service, 'Odometer', 'Vehicle.Service.Odometer')
+        add_if_present(obd, 'DTCCount', 'Vehicle.OBD.Status.DTCCount')
+        add_if_present(obd, 'MIL', 'Vehicle.OBD.Status.MIL')
+
+        return updates
 
     def _extract_unit_id(self, vss_data: Dict[str, Any]) -> Optional[str]:
         """Extract unit ID from VSS data"""
@@ -240,7 +385,7 @@ class KuksaZenohBridge(Node):
         """Handle incoming VSS data from ROS2"""
         try:
             self.stats['messages_received'] += 1
-            self.get_logger().warning(f"★★★★★ ROS2 VSS DATA RECEIVED ★★★★★, Length: {len(msg.data)}")
+            self.get_logger().info(f"🔥 DEBUG: Received VSS data, length: {len(msg.data)}")
 
             # Parse VSS data
             vss_data = json.loads(msg.data)
@@ -281,6 +426,25 @@ class KuksaZenohBridge(Node):
 
         except Exception as e:
             self.get_logger().error(f"Error handling VSS data: {e}")
+
+    def handle_status_data(self, msg):
+        """Handle simplified status data for backward compatibility"""
+        try:
+            status_data = json.loads(msg.data)
+            unit_id = status_data.get('unit_id')
+
+            if unit_id:
+                # Publish simplified status
+                key = self.zenoh_keys['status'].format(unit_id=unit_id)
+                enriched_status = {
+                    **status_data,
+                    'bridge_timestamp': datetime.now(timezone.utc).isoformat(),
+                    'district': self.district
+                }
+                self.zenoh_session.put(key, json.dumps(enriched_status))
+
+        except Exception as e:
+            self.get_logger().error(f"Error handling status data: {e}")
 
     def send_heartbeat(self):
         """Send bridge heartbeat and fleet status"""
