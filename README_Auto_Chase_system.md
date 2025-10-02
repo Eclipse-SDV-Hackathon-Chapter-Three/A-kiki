@@ -69,7 +69,7 @@ A single orchestrator (`./run_police_all.py`) launches and supervises both the d
                          └──────────────────────────────┘
 ```
 
-- **Detector**: Extracts vehicle points → lightweight clustering → selects target → publishes summary (no rendering/control; fully headless).
+- **Detector**: Extracts vehicle points → clustering → selects target → publishes summary (no rendering/control; fully headless).
 - **Follower**: Subscribes `lock_on`, `target_gps` and performs following (Pure Pursuit + headway PI).
 - **Orchestrator**: Waits for hero → launches/monitors/restarts/terminates both processes; handles logging.
 
@@ -99,14 +99,14 @@ A single orchestrator (`./run_police_all.py`) launches and supervises both the d
 ### 2) Target Detector (headless) — `auto_chase_detecter.py`
 
 - **Purpose**: Aggregate semantic vehicle points, run lightweight radius clustering, and select the nearest cluster as target.
-- **Input**: Semantic LiDAR (ROS2 PointCloud2 or Zenoh payload), optional camera boxes.
+- **Input**: Semantic LiDAR(payload by zenoh), optional camera boxes.
 - **Output**: Target summary (preferably with world coordinates) via Zenoh.
 - **Notes**: No vehicle control or UI; minimized resource usage (“no-movement/headless”).
 
 ### 3) Follower Controller — `auto_chase_lidar.py`
 
 - **Subscribe**
-  - `lock_on`: boolean or "true"/"false".
+  - `lock_on`: "true"/"false".
   - `target_gps`: Recommended: targets[*].world = {x,y,z} (used directly). If world is missing, use gps={lat,lon} → ENU conversion (requires map geodetic origin; fallback via ORIGIN_LAT/LON env).
 
 - **Control**
