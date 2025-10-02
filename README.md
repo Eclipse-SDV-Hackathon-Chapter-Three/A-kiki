@@ -4,6 +4,8 @@
 ### *A kiki*
 We are from South Korea to win this HACKATHON !!!✊✊✊
 
+<img src = "akiki.png">
+
 ## Team Members  
 | Name | GitHub Handle | Role(s) |
 |-------|---------------|---------|
