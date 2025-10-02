@@ -112,7 +112,6 @@ A single orchestrator (`./run_police_all.py`) launches and supervises both the d
 - **Control**
   - Lateral: Pure Pursuit with dynamic look-ahead based on speed/distance, clamped to [LA_MIN, LA_MAX].
   - Longitudinal: Headway PI + relative-speed term; throttle/brake caps; acceleration penalty at large steering angles.
-  - Safety: If target freshness exceeds timeout, stop applying control.
 
 ---
 
