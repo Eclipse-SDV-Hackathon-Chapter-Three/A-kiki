@@ -4,15 +4,15 @@
 
 ### GRP (GlobalRoutePlanner) Based Routing
 
-**Core Technology: CARLA GlobalRoutePlanner with A* Algorithm**
+**Core Technology: CARLA GlobalRoutePlanner with A\* Algorithm**
 
-* Utilizes **CARLA's GlobalRoutePlanner (GRP)** with internal **A* algorithm**
+* Utilizes **CARLA's GlobalRoutePlanner (GRP)** with internal **A\* algorithm**
 * Computes **shortest path through road network graph** from origin to destination
 
-**A* Algorithm Intuition**
+**A\* Algorithm Intuition**
 
 * **Dijkstra**: Only considers **distance traveled so far (g)**
-* **A***: Adds **estimated remaining distance (h)**
+* **A\***: Adds **estimated remaining distance (h)**
    * `f = g + h` (actual distance + heuristic estimate)
 * Result: **Much faster and more realistic pathfinding**
 * **Same principle used in real-world navigation systems**
