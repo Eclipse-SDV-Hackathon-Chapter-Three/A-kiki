@@ -4,7 +4,7 @@
 ### *A kiki*
 We are from South Korea to win this HACKATHON !!!✊✊✊
 
-<img src = "akiki.png">
+<img src = "images/akiki.png">
 
 ## Team Members  
 | Name | GitHub Handle | Role(s) |
@@ -23,7 +23,7 @@ We are from South Korea to win this HACKATHON !!!✊✊✊
 ## Core Idea  
 <!-- *What is your rough solution idea?* -->
 
-<img src = "akiki_system_diagram.jpg">
+<img src = "images/akiki_system_diagram.jpg">
 
 ### The Problem
 Current vehicle pursuit scenarios are dangerous and inefficient:
@@ -127,3 +127,6 @@ Approach 1: Team leader proposes ideas → Team members provide feedback → Imp
 Approach 2: Team members propose ideas → Team leader and other members review → Implementation and testing
 
 We maintain a collaborative decision-making process where all voices are heard, and decisions are validated through actual implementation and testing results.
+
+## Project Demo
+[DEMO](./DEMO.md)
