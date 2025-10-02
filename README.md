@@ -23,7 +23,7 @@ We are from South Korea to win this HACKATHON !!!✊✊✊
 ## Core Idea  
 <!-- *What is your rough solution idea?* -->
 
-<img src = "akiki_system_architecture.png">
+<img src = "akiki_system_diagram.jpg">
 
 ### The Problem
 Current vehicle pursuit scenarios are dangerous and inefficient:
@@ -77,7 +77,7 @@ coordinate seamlessly without manual communication overhead.
 # 2. How Do You Work
 
 ## Development Process  
-*Brief overview of your development process.*
+<!-- *Brief overview of your development process.* -->
 
 Our team is divided into three specialized groups:
 
@@ -91,12 +91,12 @@ Our team is divided into three specialized groups:
 - Juhun Kang
 
 ### Planning & Tracking  
-*How do you plan and track progress?*
+<!-- *How do you plan and track progress?* -->
 
 **Each team develops and tests their code locally using CARLA 0.9.15. Once implementation and debugging are complete, we integrate all nodes together for system-wide testing.**
 
 ### Quality Assurance  
-*How do you ensure quality (e.g., testing, documentation, code reviews)?*
+<!-- *How do you ensure quality (e.g., testing, documentation, code reviews)?* -->
 
 1. Testing
 
@@ -115,12 +115,12 @@ Our team is divided into three specialized groups:
 - Continuous feedback and iteration
 
 ## Communication  
-*How does your team communicate?*
+<!-- *How does your team communicate?* -->
 
 **We communicate face-to-face in our workspace, enabling rapid problem-solving and real-time collaboration. Additionally, we use messaging platforms for asynchronous updates and documentation sharing.**
 
 ## Decision Making  
-*How are decisions made in your team?*
+<!-- *How are decisions made in your team?* -->
 
 Approach 1: Team leader proposes ideas → Team members provide feedback → Implementation and testing
 
