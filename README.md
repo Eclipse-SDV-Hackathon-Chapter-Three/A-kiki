@@ -16,12 +16,12 @@ We are from South Korea to win this HACKATHON !!!✊✊✊
 | JeongMin Jo | [JeongMin](https://github.com/jojeongmin304) | Developer | 
 
 ## Challenge  
-*Which challenge have you decided to compete for?*
+<!-- *Which challenge have you decided to compete for?* -->
 
 **SDV Lab Challenge**
 
 ## Core Idea  
-*What is your rough solution idea?*
+<!-- *What is your rough solution idea?* -->
 
 <img src = "akiki_system_architecture.png">
 
