@@ -66,7 +66,7 @@ This ensures **maximum distance coverage** in critical pursuit situations.
 
 **Key Takeaway**
 
-> "By combining **GRP's fast A* search** with **multi-candidate area exploration**, our police vehicles can find **realistic shortest paths (including U-turns and reverse driving)** that adapt to real-time changes in criminal vehicle positions."
+> "By combining **GRP's fast A\* search** with **multi-candidate area exploration**, our police vehicles can find **realistic shortest paths (including U-turns and reverse driving)** that adapt to real-time changes in criminal vehicle positions."
 
 ---
 
