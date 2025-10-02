@@ -14,7 +14,6 @@ __pycache__/
 # Log files
 *.log
 logs/
-main/
 # IDE and editor specific files
 .vscode/
 .idea/
