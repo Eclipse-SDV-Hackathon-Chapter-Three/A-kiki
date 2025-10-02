@@ -127,3 +127,6 @@ Approach 1: Team leader proposes ideas → Team members provide feedback → Imp
 Approach 2: Team members propose ideas → Team leader and other members review → Implementation and testing
 
 We maintain a collaborative decision-making process where all voices are heard, and decisions are validated through actual implementation and testing results.
+
+## Project Demo
+[DEMO](./DEMO.md)

@@ -4,9 +4,10 @@
 This code is Team A KIKI’s demo for the Eclipse SDV Hackathon 2025.
 
 ### Demo video - day
-<img src="video/day_best.gif" width="720" alt="day_best demo" />
+<img src="video/day_best.gif"  alt="day_best demo" />
+
 ### Demo video - night 
-<<img src="video/accident.gif" width="720" alt="Accident demo" />
+<img src="video/accident.gif"  alt="Accident demo" />
 
 
 ### Dashboard - Before perception
