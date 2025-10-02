@@ -23,19 +23,52 @@ We are from South Korea to win this HACKATHON !!!✊✊✊
 
 <img src = "akiki_system_architecture.png">
 
-A comprehensive system for automated criminal vehicle pursuit and encirclement leveraging CARLA, ROS2, Zenoh, Kuksa, and Ankaios. The system highlights real-time data sharing, cooperative decision-making, and multi-agent autonomy in a dynamic urban environment.
+### The Problem
+Current vehicle pursuit scenarios are dangerous and inefficient:
+- **Driver overload**: Officers must drive at high speeds while tracking suspects, using radio, and reporting
+- **Poor coordination**: Other units only hear audio descriptions, can't visualize suspect location
+- **No video sharing**: Command center can't see real-time pursuit footage
+- **Manual tracking**: Officers struggle to keep visual contact during pursuit
 
-Workflow:
+### Our Solution: Autonomous Lock-on & Coordinated Pursuit System
 
-**Lock-On & Pursuit** – Police vehicles detect and lock on to suspect vehicles using LiDAR-based tracking, automatically initiating pursuit maneuvers.
+**1. Automatic Lock-on**
+- Semantic LiDAR detects collision/crime events
+- Automatically identifies and locks onto suspect vehicle
+- ObjIdx-based tracking maintains lock across frames
+- No manual targeting needed
 
-**Real-Time Monitoring** – Live video streams are transmitted via Zenoh → WebSocket, while vehicle telemetry is converted into standardized VSS format by the Kuksa Databroker and delivered to the police station’s web dashboard for monitoring and logging.
+**2. Autonomous Pursuit**
+- Chase vehicle automatically follows locked target
+- Officer focuses on assessment and decision-making, not driving
+- Safer pursuit with AI-controlled vehicle dynamics
 
-**Coordinated Response** – The lock-on signal propagates to nearby patrol units, triggering emergency mode. Each patrol calculates optimal interception routes with A* pathfinding and cooperatively deploys to encircle the suspect vehicle.
+**3. Real-time Video Streaming**
+- Live pursuit camera feed via Zenoh → WebSocket
+- Command center monitors situation on web dashboard
+- Better tactical decisions with visual context
 
-**Autonomous Coordination** – Ankaios ensures fleet-level synchronization and resilience, enabling multiple patrol cars to dynamically adapt routes as the suspect changes trajectory.
+**4. VSS-based Coordinate Broadcast**
+- Suspect GPS coordinates in standardized VSS format
+- Real-time broadcast via Zenoh to all nearby units
+- 50ms update rate for accurate positioning
 
-This architecture demonstrates how standardized vehicle interfaces, ultra-low-latency networking, and intelligent path planning can converge into a scalable, autonomous law-enforcement framework, adaptable from simulation to real-world deployment.
+**5. Coordinated Encirclement**
+- Encirclement units receive target coordinates automatically
+- A* pathfinding calculates optimal interception routes
+- Autonomous deployment for strategic positioning
+- Multi-vehicle coordination without radio chatter
+
+### Technology Stack
+- **CARLA 0.9.15**: Safe simulation environment
+- **ROS2 Humble**: Sensor processing and vehicle control
+- **Zenoh**: Ultra-low-latency messaging (<50ms)
+- **VSS**: Standardized vehicle data format
+- **WebSocket**: Real-time dashboard streaming
+
+### Key Innovation
+Combining **LiDAR-based lock-on**, **autonomous pursuit**, and **VSS-standardized coordinate sharing** enables multiple police vehicles to 
+coordinate seamlessly without manual communication overhead.
 
 ---
 
